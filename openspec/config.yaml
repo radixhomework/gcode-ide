@@ -1,0 +1,48 @@
+schema: spec-driven
+
+context: |
+  G-Code IDE (repo gcode-ide): cross-platform desktop app (Windows/macOS/Linux)
+  to author, preview, and generate GRBL G-code. Target machine: Sainsmart
+  PROVER 3018 (300x180x45 mm, GRBL dialect). Machine control is out of scope -
+  it lives in the sibling project grbl-machine-controller (Python/PySide6).
+  Handoff between the two apps is a .nc file on disk, plus shared plain-YAML
+  machine profiles (stable field names, millimeters).
+  Tech stack: Python >=3.9, PySide6, PyYAML. Pure-Python core (parsing,
+  profiles, statistics/diagnostics) with Qt only at the UI edge; pytest +
+  ruff; PyInstaller packaging. Conventions mirror grbl-machine-controller
+  (app/ package, app.main:main entry point, config.yaml style).
+  Roadmap: phase 1 IDE core (editor, parser, 2D preview, machine profiles),
+  phase 2 SVG import wizard, phase 3 tool library (SQLite + FreeCAD ToolBit
+  import) and tool-aware generation, phase 4 text/image producers,
+  phase 5 CAM niceties (fill-out, ordering, arcs, 3D preview).
+
+# Project context (optional)
+# This is shown to AI when creating artifacts.
+# Add your tech stack, conventions, style guides, domain knowledge, etc.
+# Example:
+#   context: |
+#     Tech stack: TypeScript, React, Node.js
+#     We use conventional commits
+#     Domain: e-commerce platform
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always include a "Non-goals" section
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
