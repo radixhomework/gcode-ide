@@ -1,0 +1,10 @@
+# Sainsmart PROVER 3018 — built-in machine profile (millimeters, mm/min).
+name: PROVER 3018
+bed:
+  x: 300.0
+  y: 180.0
+  z: 45.0
+feeds:
+  max_cut: 800.0
+  max_rapid: 1000.0
+safe_z: 5.0

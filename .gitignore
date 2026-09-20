@@ -1,0 +1,6 @@
+target/
+dist-java/
+dependency-reduced-pom.xml
+.idea/
+*.iml
+.vscode/

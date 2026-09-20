@@ -1,0 +1,24 @@
+/* G-code editor coloring (categories from WordClassifier) */
+.styled-text-area .paragraph-box:has-caret {
+    -fx-background-color: #eaefff;
+}
+.comment {
+    -fx-fill: #008000;
+}
+.g-word {
+    -fx-fill: #0000c0;
+    -fx-font-weight: bold;
+}
+.m-word {
+    -fx-fill: #c00000;
+}
+.axis-param {
+    -fx-fill: #b05000;
+}
+.line-number {
+    -fx-fill: #606060;
+}
+.fallback {
+    -fx-fill: #909090;
+    -fx-font-style: italic;
+}
