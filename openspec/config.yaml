@@ -2,8 +2,8 @@ schema: spec-driven
 
 context: |
   G-Code IDE (repo gcode-ide): cross-platform desktop app (Windows/macOS/Linux)
-  to author, preview, and generate GRBL G-code. Target machine: Sainsmart
-  PROVER 3018 (300x180x45 mm, GRBL dialect). Machine control is out of scope -
+  to author, preview, and generate GRBL G-code for any GRBL-driven desktop
+  CNC mill (an example profile ships; no machine is targeted). Machine control is out of scope -
   it lives in the sibling project grbl-machine-controller (Python/PySide6).
   Handoff between the two apps is a .nc file on disk, plus shared plain-YAML
   machine profiles (stable field names, millimeters).

@@ -43,7 +43,7 @@ src/main/java/dev/radixhomework/gcodeide/
   util/
     ConfigPaths.java           per-user config dir per OS
 src/main/resources/assets/
-  profiles/prover_3018.yaml    unchanged from the reference implementation
+  profiles/example_mill.yaml   generic example (was a vendor preset)
   examples/demo.nc             unchanged
 src/test/java/...              JUnit 5 (model/service) + TestFX (view smoke)
 ```

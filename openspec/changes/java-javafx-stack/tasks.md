@@ -9,7 +9,7 @@
 ## 2. Machine profiles (pure Java model)
 
 - [x] 2.1 Implement `MachineProfile` record + validation (positive bed extents/feed limits, safe-Z non-negative; rejection reason names the `bed.x`/`feeds.max_cut`-style dotted field); unit tests cover a valid profile and one rejection per invalid field, ported from the reference suite
-- [x] 2.2 Implement SnakeYAML load/serialize (`fromYaml`/`toYaml`) and create `src/main/resources/assets/profiles/prover_3018.yaml` (bed 300×180×45 mm, `feeds.max_cut: 800`, `feeds.max_rapid: 1000`, `safe_z: 5`, field names unchanged); test loads the packaged preset and asserts every documented field plus YAML round-trip
+- [x] 2.2 Implement SnakeYAML load/serialize (`fromYaml`/`toYaml`) and create the built-in example profile asset (bed 300×180×45 mm, `feeds.max_cut: 800`, `feeds.max_rapid: 1000`, `safe_z: 5`, field names unchanged); test loads the packaged preset and asserts every documented field plus YAML round-trip
 - [x] 2.3 Implement `ProfileService` (built-in resources + user directory) and `util/ConfigPaths` (per-OS config dir: `%APPDATA%\gcode-ide`, `~/Library/Application Support/gcode-ide`, `~/.config/gcode-ide`), `@Slf4j`-logging each skip reason; `@TempDir` tests verify a dropped valid profile appears and a malformed one is skipped with a reason while others still load
 
 ## 3. G-code parser (pure Java model)

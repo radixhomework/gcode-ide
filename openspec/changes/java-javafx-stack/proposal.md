@@ -12,7 +12,7 @@ This branch (`feat/java-design`) is a greenfield build; the change supersedes `g
 - **MVC architecture with backend services**: a pure-Java model and service layer (parsing, profiles, statistics/warnings, document, config — no JavaFX imports, plain JUnit) behind JavaFX views (code editor, toolpath canvas, status bar) and controllers that wire them.
 - Editor built on RichTextFX (`CodeArea`): line-number gutter, syntax coloring via a pure word-classification helper, current-line tracking, goto-line.
 - Preview as an immediate-mode JavaFX `Canvas`: millimeter coordinates, Y-up transform, depth-shaded cuts, dashed rapids, out-of-bed marking, click↔line sync, stale retention of the last good toolpath.
-- Machine-profile YAML format is **unchanged** (same fields, millimeters, mm/min) — the cross-repo interchange contract with `grbl-machine-controller` survives the stack switch. The PROVER 3018 preset and `demo.nc` example carry over verbatim.
+- Machine-profile YAML format is **unchanged** (same fields, millimeters, mm/min) — the cross-repo interchange contract with `grbl-machine-controller` survives the stack switch. The example preset (renamed generic in 3d-fixes-docs-debrand) and `demo.nc` carry over.
 - Testing: JUnit 5 for the model layer (same scenarios as the Python suite, including the incremental-inches, arc-tolerance, and warning cases); TestFX for GUI smoke tests; jpackage for distribution.
 - Updates `openspec/config.yaml` project context to describe the Java stack (it still describes Python).
 
@@ -27,7 +27,7 @@ The four capabilities restate `gcode-ide-core`'s behavioral contracts — the pr
 - `gcode-editor`: Document lifecycle (new/open/save) and the editing experience — syntax coloring for GRBL G-code, line numbers, unsaved-change tracking.
 - `gcode-parsing`: Interpreting GRBL-dialect G-code text into a toolpath model with line attribution, tolerant of comments and unsupported-but-harmless words, with explicit diagnostics for what cannot be interpreted.
 - `toolpath-preview`: 2D top-down visualization of the parsed toolpath against the machine bed, with bidirectional editor↔preview selection sync and live updates, plus toolpath statistics and safety warnings.
-- `machine-profiles`: Machine definitions (bed size, feed limits, safe-Z) as YAML data files with a built-in PROVER 3018 preset and user-selectable active profile.
+- `machine-profiles`: Machine definitions (bed size, feed limits, safe-Z) as YAML data files with a built-in example preset and user-selectable active profile.
 
 ### Modified Capabilities
 

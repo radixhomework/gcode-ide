@@ -1,15 +1,15 @@
 ## Purpose
 
-Defines machine definitions as plain YAML data — bed envelope, feed limits, safe Z — that drive the preview and safety diagnostics, ship with a PROVER 3018 preset, and are readable by external tools such as grbl-machine-controller without shared code.
+Defines machine definitions as plain YAML data — bed envelope, feed limits, safe Z — that drive the preview and safety diagnostics, ship with a generic example preset, and are readable by external tools such as grbl-machine-controller without shared code.
 
 ## ADDED Requirements
 
-### Requirement: Built-in PROVER 3018 profile
-The application SHALL ship a built-in machine profile for the Sainsmart PROVER 3018 declaring at least: bed envelope 300 × 180 × 45 mm (X, Y, Z), a maximum cutting feed, a maximum rapid feed, and a safe Z height.
+### Requirement: Built-in example profile
+The application SHALL ship a generic, machine-neutral example profile declaring at least: a bed envelope (X, Y, Z), a maximum cutting feed, a maximum rapid feed, and a safe Z height. No vendor or model is designated as the tool's target.
 
 #### Scenario: Preset contents
-- **WHEN** the built-in PROVER 3018 profile is loaded
-- **THEN** it declares a 300 × 180 × 45 mm bed envelope and positive values for maximum cutting feed, maximum rapid feed, and safe Z
+- **WHEN** the built-in example profile is loaded
+- **THEN** it declares a documented bed envelope and positive values for maximum cutting feed, maximum rapid feed, and safe Z
 
 ### Requirement: YAML profile format
 Machine profiles SHALL be plain YAML files with documented, stable field names (machine identity, bed extents, feed limits, safe Z), intended as an interchange format readable by grbl-machine-controller without any shared code.
