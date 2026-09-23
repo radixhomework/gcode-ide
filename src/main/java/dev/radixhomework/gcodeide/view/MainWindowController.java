@@ -55,7 +55,7 @@ public class MainWindowController {
     @Getter
     private final GCodeEditorView editor = new GCodeEditorView();
     @Getter
-    private final PreviewView preview = new PreviewView();
+    private final Preview3DView preview = new Preview3DView();
     @Getter
     private final ProfileService profileService;
     @Getter
@@ -67,6 +67,7 @@ public class MainWindowController {
     private final javafx.beans.property.StringProperty title =
             new javafx.beans.property.SimpleStringProperty("G-Code IDE");
     private final Function<String, Optional<Path>> openChooser;
+    private final DocumentService.PathChooser previewImageChooser;
     private boolean loadingText;
     @Getter
     private javafx.scene.Parent rootNode;
@@ -74,12 +75,19 @@ public class MainWindowController {
     /** Loads the FXML with this controller; used by App and by GUI tests. */
     public static MainWindowController create(ProfileService profileService,
             Function<String, Optional<Path>> openChooser, PathChooser saveAsChooser) {
+        return create(profileService, openChooser, saveAsChooser, suggested -> Optional.empty());
+    }
+
+    public static MainWindowController create(ProfileService profileService,
+            Function<String, Optional<Path>> openChooser, PathChooser saveAsChooser,
+            PathChooser previewImageChooser) {
         try {
             URL fxml = MainWindowController.class.getResource("/view/MainWindow.fxml");
             FXMLLoader loader = new FXMLLoader(fxml);
             MainWindowController controller = new MainWindowController(
                     profileService, openChooser,
-                    new DocumentService(displayName -> SaveDecision.CANCEL, saveAsChooser));
+                    new DocumentService(displayName -> SaveDecision.CANCEL, saveAsChooser),
+                    previewImageChooser);
             loader.setController(controller);
             controller.rootNode = loader.load();
             return controller;
@@ -108,9 +116,16 @@ public class MainWindowController {
 
     public MainWindowController(ProfileService profileService,
             Function<String, Optional<Path>> openChooser, DocumentService documentService) {
+        this(profileService, openChooser, documentService, suggested -> Optional.empty());
+    }
+
+    public MainWindowController(ProfileService profileService,
+            Function<String, Optional<Path>> openChooser, DocumentService documentService,
+            PathChooser previewImageChooser) {
         this.profileService = profileService;
         this.openChooser = openChooser;
         this.documentService = documentService;
+        this.previewImageChooser = previewImageChooser;
     }
 
     @FXML
@@ -199,6 +214,24 @@ public class MainWindowController {
     public void onSaveAs() {
         documentService.markModified(); // force a path choice even when unmodified
         onSave();
+    }
+
+    /** Saves the current preview rendering as PNG or JPG. */
+    @FXML
+    public void onSavePreviewImage() {
+        Optional<Path> chosen = previewImageChooser.choose("preview.png");
+        chosen.ifPresent(target -> {
+            try {
+                ImageExport.write(preview.node(), target);
+                log.info("preview image saved to {}", target);
+            } catch (IOException | RuntimeException e) {
+                log.warn("preview image not saved: {}", e.getMessage());
+                Alert alert = new Alert(Alert.AlertType.WARNING,
+                        "Could not save the preview image:\n" + e.getMessage(), ButtonType.OK);
+                alert.setHeaderText("Save preview image failed");
+                alert.showAndWait();
+            }
+        });
     }
 
     /** True when closing may proceed (content saved or discarded). */

@@ -16,8 +16,8 @@ class ProfileServiceTest {
     @Test
     void builtinPresetLoadsWithAllDocumentedFields() {
         ProfileService service = new ProfileService(null, null);
-        MachineProfile preset = service.byName("PROVER 3018").orElseThrow();
-        assertEquals("PROVER 3018", preset.name());
+        MachineProfile preset = service.byName("Example Mill").orElseThrow();
+        assertEquals("Example Mill", preset.name());
         assertEquals(300.0, preset.bedX());
         assertEquals(180.0, preset.bedY());
         assertEquals(45.0, preset.bedZ());
@@ -37,7 +37,7 @@ class ProfileServiceTest {
                 """);
         ProfileService service = new ProfileService(dir, null);
         List<String> names = service.profiles().stream().map(MachineProfile::name).toList();
-        assertTrue(names.contains("PROVER 3018"));
+        assertTrue(names.contains("Example Mill"));
         assertTrue(names.contains("Custom Mill"));
     }
 
@@ -60,7 +60,7 @@ class ProfileServiceTest {
     void nonYamlFilesIgnored(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("notes.txt"), "not a profile");
         ProfileService service = new ProfileService(dir, null);
-        assertEquals(List.of("PROVER 3018"),
+        assertEquals(List.of("Example Mill"),
                 service.profiles().stream().map(MachineProfile::name).toList());
     }
 

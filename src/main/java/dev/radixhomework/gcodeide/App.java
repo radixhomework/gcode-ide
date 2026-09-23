@@ -50,19 +50,31 @@ public class App extends Application {
         profileService = new ProfileService(ConfigPaths.profilesDir(), ConfigPaths.configFile());
 
         Function<String, Optional<Path>> openChooser = title -> {
-            FileChooser dialog = new FileChooser();
-            dialog.setTitle(title);
-            dialog.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter(GCODE_FILTER, "*.nc", "*.gcode", "*.ngc", "*.tap"));
-            return Optional.ofNullable(dialog.showOpenDialog(stage)).map(File::toPath);
+            FileChooser dialog = newFileChooser(title, GCODE_FILTER, "*.nc", "*.gcode", "*.ngc", "*.tap");
+            return Optional.ofNullable(dialog.showOpenDialog(stage)).map(File::toPath)
+                    .map(path -> {
+                        rememberLastDir(path, profileService);
+                        return path;
+                    });
         };
         controller = MainWindowController.create(profileService, openChooser, suggested -> {
-            FileChooser dialog = new FileChooser();
-            dialog.setTitle("Save G-code as");
+            FileChooser dialog = newFileChooser("Save G-code as", GCODE_FILTER,
+                    "*.nc", "*.gcode", "*.ngc", "*.tap");
             dialog.setInitialFileName(suggested);
-            dialog.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter(GCODE_FILTER, "*.nc", "*.gcode", "*.ngc", "*.tap"));
-            return Optional.ofNullable(dialog.showSaveDialog(stage)).map(File::toPath);
+            return Optional.ofNullable(dialog.showSaveDialog(stage)).map(File::toPath)
+                    .map(path -> {
+                        rememberLastDir(path, profileService);
+                        return path;
+                    });
+        }, suggested -> {
+            FileChooser dialog = newFileChooser("Save preview image",
+                    "Images (*.png, *.jpg)", "*.png", "*.jpg");
+            dialog.setInitialFileName(suggested);
+            return Optional.ofNullable(dialog.showSaveDialog(stage)).map(File::toPath)
+                    .map(path -> {
+                        rememberLastDir(path, profileService);
+                        return path;
+                    });
         });
         controller.getDocumentService().setPrompt(MainWindowController.alertPrompt());
 
@@ -78,6 +90,37 @@ public class App extends Application {
             saveGeometry(stage, profileService);
         });
         stage.show();
+    }
+
+    private FileChooser newFileChooser(String title, String filterName, String... extensions) {
+        FileChooser dialog = new FileChooser();
+        dialog.setTitle(title);
+        dialog.getExtensionFilters().add(new FileChooser.ExtensionFilter(filterName, extensions));
+        applyLastDir(dialog, profileService);
+        return dialog;
+    }
+
+    /** Starts the dialog in the last used directory, when it still exists. */
+    static void applyLastDir(FileChooser dialog, ProfileService profiles) {
+        if (profiles.loadConfig().get("last_open_dir") instanceof String dir) {
+            File file = new File(dir);
+            if (file.isDirectory()) {
+                dialog.setInitialDirectory(file);
+            }
+        }
+    }
+
+    /** Persists the parent of a successfully used file as the next initial directory. */
+    static void rememberLastDir(Path file, ProfileService profiles) {
+        Path parent = file.toAbsolutePath().getParent();
+        if (parent == null) {
+            return;
+        }
+        try {
+            profiles.updateConfig(config -> config.put("last_open_dir", parent.toString()));
+        } catch (RuntimeException e) {
+            log.warn("last directory not remembered: {}", e.getMessage());
+        }
     }
 
     @SuppressWarnings("unchecked")

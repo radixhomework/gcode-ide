@@ -14,7 +14,7 @@ import org.yaml.snakeyaml.error.YAMLException;
  * field names, additive-only evolution:
  *
  * <pre>{@code
- * name: PROVER 3018
+ * name: Example Mill
  * bed: { x: 300.0, y: 180.0, z: 45.0 }
  * feeds:
  *   max_cut: 800.0

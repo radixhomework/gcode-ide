@@ -2,7 +2,7 @@
 
 A small desktop IDE for GRBL G-code: hand-edit programs with syntax coloring,
 preview the toolpath against the machine bed, and — in later phases — generate
-code from SVG drawings, text, and images. Built for a Sainsmart PROVER 3018;
+code from SVG drawings, text, and images. 
 machine control (jogging, streaming, probing) lives in the sibling project
 [grbl-machine-controller](https://github.com/radixhomework/grbl-machine-controller).
 
@@ -20,10 +20,16 @@ mvn javafx:run        # start the IDE
 
 Open `src/main/resources/assets/examples/demo.nc` from the app to see
 editing, live preview, statistics, and out-of-bed warnings working together.
+The preview is a **3D perspective view** where pass depth is directly visible
+(drag to rotate, wheel to zoom, click a segment to jump to its source line).
+While typing, the editor offers **autocompletion with one-line command
+documentation** for the supported G/M codes and parameter words.
+**File > Save Preview Image...** exports the current preview as PNG or JPG.
+File dialogs remember the last used directory.
 
 ## Machine profiles
 
-Profiles are plain YAML (millimeters, mm/min) — the PROVER 3018 preset ships
+Profiles are plain YAML (millimeters, mm/min) — a generic Example Mill preset ships
 built-in under `src/main/resources/assets/profiles/` — plus any files you
 drop into your user config directory (`%APPDATA%\gcode-ide\profiles` on
 Windows, `~/Library/Application Support/gcode-ide/profiles` on macOS,
@@ -31,7 +37,7 @@ Windows, `~/Library/Application Support/gcode-ide/profiles` on macOS,
 read by `grbl-machine-controller` without shared code.
 
 ```yaml
-name: PROVER 3018
+name: Example Mill
 bed: { x: 300.0, y: 180.0, z: 45.0 }
 feeds:
   max_cut: 800.0

@@ -21,7 +21,7 @@ import org.yaml.snakeyaml.Yaml;
 @Slf4j
 public class ProfileService {
 
-    private static final List<String> BUILTIN_RESOURCES = List.of("assets/profiles/prover_3018.yaml");
+    private static final List<String> BUILTIN_RESOURCES = List.of("assets/profiles/example_mill.yaml");
 
     private final Path userProfilesDir;
     private final Path configFile;

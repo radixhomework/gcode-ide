@@ -19,6 +19,7 @@
         <SeparatorMenuItem/>
         <MenuItem text="Save" onAction="#onSave" accelerator="Shortcut+S"/>
         <MenuItem text="Save As..." onAction="#onSaveAs" accelerator="Shortcut+Shift+S"/>
+        <MenuItem text="Save Preview Image..." onAction="#onSavePreviewImage"/>
       </Menu>
     </MenuBar>
   </top>

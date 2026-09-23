@@ -9,6 +9,7 @@ import dev.radixhomework.gcodeide.service.ProfileService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +27,8 @@ class MainWindowIntegrationTest extends ApplicationTest {
     private ProfileService profileService;
     private MainWindowController controller;
     private Path saveTarget;
+    private final java.util.concurrent.atomic.AtomicReference<Path> previewImageTarget =
+            new java.util.concurrent.atomic.AtomicReference<>();
 
     @Override
     public void start(Stage stage) throws IOException {
@@ -40,7 +43,8 @@ class MainWindowIntegrationTest extends ApplicationTest {
         saveTarget = dir.resolve("saved.nc");
         controller = MainWindowController.create(profileService,
                 title -> Optional.empty(),
-                suggested -> Optional.of(saveTarget));
+                suggested -> Optional.of(saveTarget),
+                suggested -> Optional.ofNullable(previewImageTarget.get()));
         // keep the cancel-only default prompt: no real modal can ever block a test
         stage.setScene(new javafx.scene.Scene(controller.root(), 900, 600));
         stage.show();
@@ -94,7 +98,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
         assertTrue(controller.warningsTooltip().contains("300"));
         interact(() -> controller.selectProfile("Wide Mill"));
         assertEquals("", controller.warningsText());
-        assertEquals(400.0, controller.getPreview().drawnBedX());
+        assertEquals(400.0, controller.getPreview().profile().bedX());
     }
 
     // --- task 7.4: config persistence -----------------------------------------------
@@ -181,7 +185,62 @@ class MainWindowIntegrationTest extends ApplicationTest {
         waitUntil(() -> controller.getPreview().highlightCount() > 1);
     }
 
+    // --- 3D preview integration ----------------------------------------------------------
+
+    @Test
+    void previewIs3dAndSyncsBothDirections() throws Exception {
+        interact(() -> controller.loadText("G0 X10\nG1 X20 F600\n"));
+        waitUntil(() -> controller.getPreview().segmentCount() == 2);
+        assertEquals(3, controller.getPreview().renderedNodes(), "bed box + 2 cylinders");
+        assertFalse(controller.getPreview().isStale());
+
+        // editor -> preview highlight
+        interact(() -> controller.getEditor().gotoLine(2));
+        waitUntil(() -> controller.getPreview().highlightCount() == 1);
+
+        // preview -> editor: click the line-2 segment (pick result)
+        List<Integer> selected = new ArrayList<>();
+        controller.getPreview().addLineSelectedListener(selected::add);
+        javafx.scene.shape.Shape3D segment = controller.getPreview().segmentNodeForLine(2);
+        interact(() -> {
+            javafx.scene.input.PickResult pick = new javafx.scene.input.PickResult(
+                    segment, new javafx.geometry.Point3D(15, 0, 0), 1.0);
+            javafx.event.Event.fireEvent(controller.getPreview().subScene(), pickPress(pick));
+            javafx.event.Event.fireEvent(controller.getPreview().subScene(), pickRelease(pick));
+        });
+        assertEquals(List.of(2), selected);
+        interact(() -> org.junit.jupiter.api.Assertions.assertEquals(2,
+                controller.getEditor().node().getCurrentParagraph() + 1));
+    }
+
+    // --- save preview image ------------------------------------------------------------
+
+    @Test
+    void savePreviewImageActionWritesFile() throws Exception {
+        Path target = dir.resolve("shot.png");
+        previewImageTarget.set(target);
+        interact(() -> controller.loadText("G1 X10 F600\n"));
+        waitUntil(() -> controller.getPreview().segmentCount() == 1);
+        interact(() -> controller.onSavePreviewImage());
+        assertTrue(java.nio.file.Files.exists(target), "image written via the menu action");
+        java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(target.toFile());
+        org.junit.jupiter.api.Assertions.assertNotNull(image, "valid image file");
+        assertTrue(image.getWidth() > 0 && image.getHeight() > 0);
+    }
+
     // -- helpers -----------------------------------------------------------------
+
+    private static javafx.scene.input.MouseEvent pickPress(javafx.scene.input.PickResult pick) {
+        return new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_PRESSED,
+                5, 5, 0, 0, javafx.scene.input.MouseButton.PRIMARY, 1,
+                false, false, false, false, true, false, false, false, false, false, pick);
+    }
+
+    private static javafx.scene.input.MouseEvent pickRelease(javafx.scene.input.PickResult pick) {
+        return new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_RELEASED,
+                5, 5, 0, 0, javafx.scene.input.MouseButton.PRIMARY, 1,
+                false, false, false, false, false, false, false, false, false, true, pick);
+    }
 
     private static void waitUntil(java.util.function.BooleanSupplier condition)
             throws InterruptedException {

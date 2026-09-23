@@ -132,6 +132,41 @@ class GCodeParserTest {
         assertEquals(3 * Math.PI / 2, total, 1e-6);
     }
 
+    // --- chirality goldens: hand-computed arc midpoints in bed coordinates ---
+
+    @Test
+    void g2IjArcPassesAboveTheChordMidpoint() {
+        // G2 X10 Y10 I10 from origin: center (10,0), r=10; clockwise from 180°
+        // to 90° sweeps through 135° → midpoint (2.929, 7.071), above the chord
+        ParseResult result = GCodeParser.parse("G2 X10 Y10 I10 F600\n");
+        List<Move> arcMoves = arcs(result);
+        Move mid = arcMoves.get((arcMoves.size() - 1) / 2);
+        assertEquals(10 + 10 * Math.cos(3 * Math.PI / 4), mid.end().x(), 0.01);
+        assertEquals(10 * Math.sin(3 * Math.PI / 4), mid.end().y(), 0.01);
+        assertTrue(mid.end().y() > 5.0, "arc bulges above the (0,0)-(10,10) chord");
+    }
+
+    @Test
+    void g3RArcPassesBelowTheChordMidpoint() {
+        // G3 X10 Y10 R10 from origin: minor CCW arc, center (0,10); midpoint
+        // at angle -45° → (7.071, 2.929), below the chord
+        ParseResult result = GCodeParser.parse("G3 X10 Y10 R10 F600\n");
+        List<Move> arcMoves = arcs(result);
+        Move mid = arcMoves.get((arcMoves.size() - 1) / 2);
+        assertEquals(10 * Math.cos(-Math.PI / 4), mid.end().x(), 0.01);
+        assertEquals(10 + 10 * Math.sin(-Math.PI / 4), mid.end().y(), 0.01);
+        assertTrue(mid.end().y() < 5.0, "arc bulges below the (0,0)-(10,10) chord");
+    }
+
+    @Test
+    void arcsCurveOppositeWaysForSameEndpoints() {
+        ParseResult cw = GCodeParser.parse("G2 X10 Y10 I10 F600\n");
+        ParseResult ccw = GCodeParser.parse("G3 X10 Y10 R10 F600\n");
+        double cwMidY = arcs(cw).get((arcs(cw).size() - 1) / 2).end().y();
+        double ccwMidY = arcs(ccw).get((arcs(ccw).size() - 1) / 2).end().y();
+        assertTrue(cwMidY > ccwMidY, "G2 and G3 between the same points bulge oppositely");
+    }
+
     private static double sweptAngle(List<Move> arcMoves) {
         double cx = circumX(arcMoves);
         double cy = circumY(arcMoves);
