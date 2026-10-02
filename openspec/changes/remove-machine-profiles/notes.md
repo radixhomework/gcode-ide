@@ -12,3 +12,14 @@
   bed-containment assertion becomes a bounds check.
 - Stale `active_profile` keys in existing user config.yaml files are ignored,
   not deleted.
+
+- Post-apply fix (review): the 3D view rendered Z-inverted. Root cause
+  confirmed by rendered probes: the yaw/pitch group rig sent the camera
+  below the content plane with an inverted up vector (the analytic sign
+  conventions for JavaFX Rotate did not match its effective behavior).
+  Fix: negative pitch places the camera above; an added 180-degree roll
+  un-flips the camera's up; the visibility regression check now tests
+  world-space corners through the actual toWorld mapping.
+- Pan persistence: applyCamera() was resetting panTranslate from the stale
+  `pan` field, wiping the pan on the next dolly/orbit; the field is now
+  synced on every pan drag.

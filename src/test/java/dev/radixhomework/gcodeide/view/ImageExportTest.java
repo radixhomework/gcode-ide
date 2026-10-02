@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.radixhomework.gcodeide.model.parsing.GCodeParser;
-import dev.radixhomework.gcodeide.model.profiles.MachineProfile;
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
@@ -15,15 +14,11 @@ import org.testfx.framework.junit5.ApplicationTest;
 
 class ImageExportTest extends ApplicationTest {
 
-    private static final MachineProfile PROFILE =
-            new MachineProfile("Test Mill", 300.0, 180.0, 45.0, 800.0, 1000.0, 5.0);
-
     private Preview3DView view;
 
     @Override
     public void start(Stage stage) {
         view = new Preview3DView();
-        view.setProfile(PROFILE);
         stage.setScene(new javafx.scene.Scene(view.node(), 500, 350));
         stage.show();
     }

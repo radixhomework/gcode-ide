@@ -16,9 +16,10 @@ planned in the original design.
   (SVG filter for now — the entry name anticipates raster formats later) and
   launches an import wizard.
 - **Import wizard**: collects the import parameters over the loaded drawing —
-  target size on the bed (scale), placement, cutting depth as passes of a
-  chosen depth-per-pass, cutting feed, rapid (safe) height, spindle speed —
-  and reports unsupported/ignored SVG constructs as warnings.
+  target size (scale), placement (free X/Y - the app is
+  machine-profile-free), cutting depth as passes of a chosen depth-per-pass,
+  cutting feed, rapid (safe) height, spindle speed — and reports
+  unsupported/ignored SVG constructs as warnings.
 - **SVG-to-G-code generation** (pure model): interprets the SVG's stroked
   geometry (paths, basic shapes) into GRBL G-code in millimeters — open
   paths become open cut runs, closed shapes become closed loops, with rapid
@@ -27,8 +28,8 @@ planned in the original design.
   (default name from the SVG file), flowing through the existing live
   preview, statistics, and warnings.
 - **Round-trip validity**: generated code parses with the existing GRBL
-  parser, stays inside the chosen bed placement, and reproduces the imported
-  geometry within a stated tolerance — verified by tests, per the roadmap.
+  parser and reproduces the imported geometry within a stated tolerance —
+  verified by tests, per the roadmap.
 
 **Explicit non-goals:** raster image import (phase 4); fill/hatch of filled
 areas (phase 5 fill-out); multi-tool or tool-diameter compensation; emitting
@@ -53,7 +54,8 @@ skip).
 - **Code**: new pure `model/svg/` package (path-data parser, geometry,
   generator, no JavaFX), a JavaFX wizard dialog, `MainWindowController`/FXML
   menu wiring, `App` chooser wiring, tests (pure generator + round-trip + a
-  wizard smoke test), README.
+  wizard smoke test), README. Note (remove-machine-profiles): placement is
+  free X/Y without bed clamping; round-trip asserts bounds containment.
 - **Dependencies**: none new — SVG XML via the JDK's built-in parser;
   geometry math hand-rolled.
 - **Ecosystem**: none — output is ordinary `.nc` G-code in the existing

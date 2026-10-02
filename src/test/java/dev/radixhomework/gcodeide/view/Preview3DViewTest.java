@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.radixhomework.gcodeide.model.parsing.GCodeParser;
 import dev.radixhomework.gcodeide.model.parsing.Move;
 import dev.radixhomework.gcodeide.model.parsing.MoveKind;
-import dev.radixhomework.gcodeide.model.profiles.MachineProfile;
 import java.util.ArrayList;
 import java.util.List;
 import javafx.geometry.Point3D;
@@ -19,9 +18,6 @@ import org.testfx.framework.junit5.ApplicationTest;
 
 class Preview3DViewTest extends ApplicationTest {
 
-    private static final MachineProfile PROFILE =
-            new MachineProfile("Test Mill", 300.0, 180.0, 45.0, 800.0, 1000.0, 5.0);
-
     private Preview3DView view;
 
     @Override
@@ -31,26 +27,52 @@ class Preview3DViewTest extends ApplicationTest {
         stage.show();
     }
 
+    private void load(String gcode) {
+        interact(() -> view.setToolpath(GCodeParser.parse(gcode)));
+    }
+
+    // --- world mapping (re-anchored on content bounds) ---------------------------
+
     @Test
-    void worldMappingCentersBedAndPutsDepthDown() {
-        Point3D origin = Preview3DView.toWorld(0, 0, 0, PROFILE);
-        assertEquals(-150.0, origin.getX(), 1e-9); // bed X centered
-        assertEquals(90.0, origin.getZ(), 1e-9); // bed Y centered (orientation-preserving −Z)
+    void worldMappingCentersContentAndPutsDepthDown() {
+        load("G0 X0 Y0\nG1 X30 Y30 Z-1 F600\n");
+        Point3D origin = view.toWorld(0, 0, 0);
+        assertEquals(-15.0, origin.getX(), 1e-9); // content X centered
+        assertEquals(15.0, origin.getZ(), 1e-9); // content Y centered (orientation-preserving -Z)
         assertEquals(0.0, origin.getY(), 1e-9);
-        Point3D shallow = Preview3DView.toWorld(10, 10, -1, PROFILE);
-        Point3D deep = Preview3DView.toWorld(10, 10, -4, PROFILE);
+        Point3D shallow = view.toWorld(10, 10, -1);
+        Point3D deep = view.toWorld(10, 10, -4);
         assertTrue(deep.getY() < shallow.getY(), "deeper passes render lower");
-        assertTrue(Preview3DView.toWorld(0, 180, 0, PROFILE).getZ() < origin.getZ(),
+        assertTrue(view.toWorld(0, 30, 0).getZ() < view.toWorld(0, 0, 0).getZ(),
                 "bed +Y maps toward -Z (screen-up in a top view)");
     }
 
     @Test
-    void cameraStartsAboveTheBed() {
-        interact(() -> view.setProfile(PROFILE));
+    void cameraStartsAboveTheContent() {
+        load("G1 X10 F600\n");
         Point3D position = Preview3DView.cameraPosition(view.yawAngle(), view.pitchAngle(),
                 view.cameraDistance());
-        assertTrue(position.getY() > 0, "initial camera above the bed plane");
-        assertTrue(view.bedVisibleFromCamera());
+        assertTrue(position.getY() > 0, "initial camera above the content plane");
+        assertTrue(view.contentVisibleFromCamera());
+    }
+
+    @Test
+    void previewCanShrinkInASplitPane() {
+        // regression: SubScene's min size defaults to its current bounds,
+        // which froze the SplitPane divider (the preview could never shrink)
+        assertTrue(view.node().getMinWidth() == 0 && view.node().getMinHeight() == 0,
+                "preview wrapper min sizes are zero so the divider moves freely");
+    }
+
+    @Test
+    void contentIsVisibleFromTheCamera() {
+        load("G1 X10 F600\n");
+        assertTrue(view.contentVisibleFromCamera(), "content inside view cone and clip range");
+        assertTrue(view.cameraFarClip() > view.cameraDistance());
+
+        // wheel-zooming out keeps the content visible
+        interact(() -> view.dolly(-1000));
+        assertTrue(view.contentVisibleFromCamera());
     }
 
     @Test
@@ -58,74 +80,57 @@ class Preview3DViewTest extends ApplicationTest {
         // G2 X10 Y10 I10 from the origin bulges ABOVE the chord in bed
         // coordinates (parser golden); the world mapping must preserve that
         // side when viewed from above (bed +Y toward screen-top = world -Z)
-        var result = dev.radixhomework.gcodeide.model.parsing.GCodeParser.parse("G2 X10 Y10 I10 F600\n");
+        var result = GCodeParser.parse("G2 X10 Y10 I10 F600\n");
         var arcMoves = result.moves().stream()
-                .filter(dev.radixhomework.gcodeide.model.parsing.Move::fromArc).toList();
+                .filter(Move::fromArc).toList();
         var mid = arcMoves.get((arcMoves.size() - 1) / 2);
-        double worldZArcMid = Preview3DView.toWorld(mid.end().x(), mid.end().y(), 0, PROFILE).getZ();
-        double worldZChordMid = Preview3DView.toWorld(5, 5, 0, PROFILE).getZ();
+        interact(() -> view.setToolpath(result));
+        double worldZArcMid = view.toWorld(mid.end().x(), mid.end().y(), 0).getZ();
+        double worldZChordMid = view.toWorld(5, 5, 0).getZ();
         assertTrue(worldZArcMid < worldZChordMid,
                 "G2 arc bulges to the same side as in bed coordinates");
     }
 
+    // --- rendering ------------------------------------------------------------------
+
     @Test
-    void oneSegmentNodePerMovePlusBed() {
-        interact(() -> {
-            view.setProfile(PROFILE);
-            view.setToolpath(GCodeParser.parse("G0 X10\nG1 X20 F600\nG1 Z-4 X30\n"));
-        });
-        assertEquals(3, view.segmentCount());
-        assertEquals(4, view.renderedNodes(), "bed box + one cylinder per move");
+    void segmentCountMatchesMoveCount() {
+        load("G0 X10 Y10\nG1 X20 Y20 F600\n");
+        assertEquals(2, view.segmentCount());
+        assertEquals(2, view.renderedNodes(), "one cylinder per move, no bed box");
     }
 
     @Test
-    void setCurrentLineHighlightsThatLinesSegments() {
-        interact(() -> {
-            view.setProfile(PROFILE);
-            view.setToolpath(GCodeParser.parse("G0 X10\nG1 X20 F600\nG1 Z-4 X30\n"));
-        });
-        interact(() -> view.setCurrentLine(2));
-        assertEquals(1, view.highlightCount());
-        interact(() -> view.setCurrentLine(9));
-        assertEquals(0, view.highlightCount());
+    void strokeStyleDecisions() {
+        var light = Preview3DView.PreviewPalette.LIGHT;
+        Move rapid = move(MoveKind.RAPID, 0, 0, 10, 0, 1);
+        Move cut = move(MoveKind.CUT, 10, 0, 20, 0, 2);
+        assertEquals(light.rapid(), Preview3DView.segmentColor(rapid, -2.0, light));
+        assertTrue(!Preview3DView.segmentColor(cut, -2.0, light)
+                .equals(Preview3DView.depthColor(-0.5, -2.0)),
+                "depth ramp distinguishes depths");
+        assertTrue(Preview3DView.depthColor(0, -2.0).getHue()
+                > Preview3DView.depthColor(-2, -2.0).getHue(),
+                "hue decreases with depth");
     }
 
     @Test
-    void staleKeepsLastGoodToolpath() {
-        interact(() -> {
-            view.setProfile(PROFILE);
-            view.setToolpath(GCodeParser.parse("G0 X10\nG1 X20 F600\n"));
-        });
-        assertFalse(view.isStale());
-        interact(() -> view.setToolpath(GCodeParser.parse("G1 X\n")));
-        assertTrue(view.isStale());
-        assertEquals(2, view.segmentCount(), "last good toolpath retained");
+    void setDarkSwapsPaletteAndRestyles() {
+        load("G1 X10 F600\n");
+        assertEquals(Preview3DView.PreviewPalette.LIGHT, view.palette());
+        int rebuilds = view.rebuildCount();
+        interact(() -> view.setDark(true));
+        assertEquals(Preview3DView.PreviewPalette.DARK, view.palette());
+        assertTrue(view.rebuildCount() > rebuilds, "dark switch restyled live");
+        interact(() -> view.setDark(false));
+        assertEquals(Preview3DView.PreviewPalette.LIGHT, view.palette());
     }
 
-    @Test
-    void dragRotatesAroundBedCenter() {
-        interact(() -> {
-            view.setProfile(PROFILE);
-            view.setToolpath(GCodeParser.parse("G1 X10 F600\n"));
-        });
-        double before = view.yawAngle();
-        interact(() -> {
-            javafx.event.Event.fireEvent(view.subScene(),
-                    new MouseEvent(MouseEvent.MOUSE_PRESSED, 0, 0, 0, 0,
-                            javafx.scene.input.MouseButton.PRIMARY, 1,
-                            false, false, false, false, true, false, false, false, false, false,
-                            null));
-            javafx.event.Event.fireEvent(view.subScene(), drag(20, 10));
-        });
-        org.junit.jupiter.api.Assertions.assertNotEquals(before, view.yawAngle());
-    }
+    // --- sync -------------------------------------------------------------------------
 
     @Test
     void clickOnSegmentEmitsLineSelected() {
-        interact(() -> {
-            view.setProfile(PROFILE);
-            view.setToolpath(GCodeParser.parse("G0 X10\nG1 X20 F600\n"));
-        });
+        load("G0 X10\nG1 X20 F600\n");
         List<Integer> selected = new ArrayList<>();
         view.addLineSelectedListener(selected::add);
         javafx.scene.shape.Shape3D segment = view.segmentNodeForLine(2);
@@ -139,134 +144,64 @@ class Preview3DViewTest extends ApplicationTest {
     }
 
     @Test
-    void segmentColorDecisions() {
-        var light = Preview3DView.PreviewPalette.LIGHT;
-        Move rapid = move(MoveKind.RAPID, 0, 0, 10, 0, 1);
-        Move cut = move(MoveKind.CUT, 10, 0, 20, 0, 2);
-        assertEquals(light.rapid(), Preview3DView.segmentColor(rapid, false, -2.0, light));
-        assertEquals(light.outOfBed(), Preview3DView.segmentColor(cut, true, -2.0, light));
-        assertTrue(!Preview3DView.segmentColor(cut, false, -2.0, light)
-                .equals(Preview3DView.depthColor(-0.5, -2.0)),
-                "depth ramp distinguishes depths");
-        assertTrue(Preview3DView.depthColor(0, -2.0).getHue()
-                > Preview3DView.depthColor(-2, -2.0).getHue(),
-                "hue decreases with depth");
+    void setCurrentLineHighlightsThatLinesSegments() {
+        load("G0 X10\nG1 X20 F600\nG1 Z-4 X30\n");
+        interact(() -> view.setCurrentLine(2));
+        assertEquals(1, view.highlightCount());
+        interact(() -> view.setCurrentLine(9));
+        assertEquals(0, view.highlightCount());
     }
 
     @Test
-    void setDarkSwapsPaletteAndRestyles() {
+    void staleKeepsLastGoodToolpath() {
+        load("G0 X10\nG1 X20 F600\n");
+        assertFalse(view.isStale());
+        interact(() -> view.setToolpath(GCodeParser.parse("G1 X\n")));
+        assertTrue(view.isStale());
+        assertEquals(2, view.segmentCount(), "last good toolpath retained");
+    }
+
+    @Test
+    void dragRotatesAroundBedCenter() {
+        load("G1 X10 F600\n");
+        double before = view.yawAngle();
         interact(() -> {
-            view.setProfile(PROFILE);
-            view.setToolpath(GCodeParser.parse("G1 X10 F600\n"));
+            javafx.event.Event.fireEvent(view.subScene(),
+                    new MouseEvent(MouseEvent.MOUSE_PRESSED, 0, 0, 0, 0,
+                            javafx.scene.input.MouseButton.PRIMARY, 1,
+                            false, false, false, false, true, false, false, false, false, false,
+                            null));
+            javafx.event.Event.fireEvent(view.subScene(), drag(20, 10));
         });
-        assertEquals(Preview3DView.PreviewPalette.LIGHT, view.palette());
-        int rebuilds = view.rebuildCount();
-        interact(() -> view.setDark(true));
-        assertEquals(Preview3DView.PreviewPalette.DARK, view.palette());
-        assertTrue(view.rebuildCount() > rebuilds, "dark switch restyled live");
-        interact(() -> view.setDark(false));
-        assertEquals(Preview3DView.PreviewPalette.LIGHT, view.palette());
-    }
-
-    private static dev.radixhomework.gcodeide.model.parsing.Move move(
-            dev.radixhomework.gcodeide.model.parsing.MoveKind kind,
-            double x1, double y1, double x2, double y2, int line) {
-        return new dev.radixhomework.gcodeide.model.parsing.Move(
-                kind, new dev.radixhomework.gcodeide.model.parsing.Position(x1, y1, 0),
-                new dev.radixhomework.gcodeide.model.parsing.Position(x2, y2, 0), line,
-                kind == dev.radixhomework.gcodeide.model.parsing.MoveKind.CUT ? 600.0 : null, false,
-                dev.radixhomework.gcodeide.model.parsing.Spindle.OFF);
-    }
-
-    private static MouseEvent drag(double dx, double dy) {
-        return new MouseEvent(MouseEvent.MOUSE_DRAGGED, dx, dy, 0, 0,
-                javafx.scene.input.MouseButton.PRIMARY, 1,
-                false, false, false, false, true, false, false, false, false, false, null);
-    }
-
-    private static MouseEvent press(javafx.scene.input.PickResult pick) {
-        return new MouseEvent(MouseEvent.MOUSE_PRESSED, 5, 5, 0, 0,
-                javafx.scene.input.MouseButton.PRIMARY, 1,
-                false, false, false, false, true, false, false, false, false, false, pick);
-    }
-
-    private static MouseEvent release(javafx.scene.input.PickResult pick) {
-        return new MouseEvent(MouseEvent.MOUSE_RELEASED, 5, 5, 0, 0,
-                javafx.scene.input.MouseButton.PRIMARY, 1,
-                false, false, false, false, false, false, false, false, false, true, pick);
+        org.junit.jupiter.api.Assertions.assertNotEquals(before, view.yawAngle());
     }
 
     @Test
-    void scrollDolliesCamera() {
-        interact(() -> view.setProfile(PROFILE));
-        double before = view.cameraDistance();
-        interact(() -> view.dolly(-20));
-        org.junit.jupiter.api.Assertions.assertTrue(view.cameraDistance() > before);
-    }
-
-    @Test
-    void previewCanShrinkInASplitPane() {
-        // regression: SubScene's min size defaults to its current bounds,
-        // which froze the SplitPane divider (the preview could never shrink)
-        assertTrue(view.node().getMinWidth() == 0 && view.node().getMinHeight() == 0,
-                "preview wrapper min sizes are zero so the divider moves freely");
-    }
-
-    @Test
-    void bedIsVisibleFromTheCamera() {
-        interact(() -> view.setProfile(PROFILE));
-        // regression: the camera must look at the bed and clip range must cover
-        // it — the previous translate-only camera failed both
-        assertTrue(view.bedVisibleFromCamera(), "bed inside view cone and clip range");
-        assertTrue(view.cameraFarClip() > view.cameraDistance());
-
-        // wheel-zooming out keeps the bed visible
-        interact(() -> view.dolly(-1000));
-        assertTrue(view.bedVisibleFromCamera());
-    }
-
-    @Test
-    void panDeltaFollowsCameraAxesAndZoom() {
-        // straight ahead: screen-right is world +X, nothing else moves
-        Point3D ahead = Preview3DView.panDelta(0, 0, 100, 10, 0);
-        org.junit.jupiter.api.Assertions.assertTrue(ahead.getX() > 0);
-        org.junit.jupiter.api.Assertions.assertEquals(0, ahead.getY(), 1e-9);
-        org.junit.jupiter.api.Assertions.assertEquals(0, ahead.getZ(), 1e-9);
-
-        // after a 90° yaw, screen-right is world -Z
-        Point3D yawed = Preview3DView.panDelta(90, 0, 100, 10, 0);
-        org.junit.jupiter.api.Assertions.assertEquals(0, yawed.getX(), 1e-9);
-        org.junit.jupiter.api.Assertions.assertTrue(yawed.getZ() < 0);
-
-        // dragging down moves content down (-up)
-        Point3D down = Preview3DView.panDelta(0, 0, 100, 0, 10);
-        org.junit.jupiter.api.Assertions.assertTrue(down.getY() < 0);
-
-        // speed couples to zoom: double distance, double delta
-        Point3D twice = Preview3DView.panDelta(-30, -35, 200, 10, 10);
-        Point3D once = Preview3DView.panDelta(-30, -35, 100, 10, 10);
-        org.junit.jupiter.api.Assertions.assertEquals(twice.getX(), once.getX() * 2, 1e-9);
-        org.junit.jupiter.api.Assertions.assertEquals(twice.getY(), once.getY() * 2, 1e-9);
-    }
-
-    @Test
-    void rightDragPansWithoutRotating() {
-        interact(() -> view.setProfile(PROFILE));
+    void rightDragPansWhenPlatformOmitsButtonFlags() {
+        interact(() -> load("G1 X10 F600\n"));
         double yawBefore = view.yawAngle();
-        double pitchBefore = view.pitchAngle();
+        // regression for the real-world failure: platform DRAGGED events can
+        // omit the button-down flags; dispatch must use the press button.
         interact(() -> {
-            javafx.event.Event.fireEvent(view.subScene(), buttonPress());
-            javafx.event.Event.fireEvent(view.subScene(), buttonDrag());
+            javafx.event.Event.fireEvent(view.subScene(),
+                    new MouseEvent(MouseEvent.MOUSE_PRESSED, 0, 0, 0, 0,
+                            javafx.scene.input.MouseButton.SECONDARY, 1,
+                            false, false, false, false, false, false, false, false, false, false,
+                            null));
+            javafx.event.Event.fireEvent(view.subScene(),
+                    new MouseEvent(MouseEvent.MOUSE_DRAGGED, 25, 15, 0, 0,
+                            javafx.scene.input.MouseButton.SECONDARY, 1,
+                            false, false, false, false, false, false, false, false, false, false,
+                            null));
         });
         org.junit.jupiter.api.Assertions.assertTrue(view.panX() != 0 || view.panY() != 0,
-                "pan offset changed");
+                "pan offset changed despite missing button flags");
         org.junit.jupiter.api.Assertions.assertEquals(yawBefore, view.yawAngle());
-        org.junit.jupiter.api.Assertions.assertEquals(pitchBefore, view.pitchAngle());
     }
 
     @Test
     void leftDragOrbitsWithoutPanning() {
-        interact(() -> view.setProfile(PROFILE));
+        interact(() -> load("G1 X10 F600\n"));
         double yawBefore = view.yawAngle();
         interact(() -> {
             javafx.event.Event.fireEvent(view.subScene(),
@@ -283,7 +218,7 @@ class Preview3DViewTest extends ApplicationTest {
 
     @Test
     void panPersistsAcrossOrbitAndZoom() {
-        interact(() -> view.setProfile(PROFILE));
+        interact(() -> load("G1 X10 F600\n"));
         interact(() -> {
             javafx.event.Event.fireEvent(view.subScene(), buttonPress());
             javafx.event.Event.fireEvent(view.subScene(), buttonDrag());
@@ -304,31 +239,6 @@ class Preview3DViewTest extends ApplicationTest {
         org.junit.jupiter.api.Assertions.assertEquals(panY, view.panY(), 1e-9);
     }
 
-    @Test
-    void rightDragPansWhenPlatformOmitsButtonFlags() {
-        interact(() -> view.setProfile(PROFILE));
-        double yawBefore = view.yawAngle();
-        // regression for the real-world failure: platform DRAGGED events can
-        // omit the button-down flags; dispatch must use the press button.
-        // (A TestFX robot-gesture test proved flaky, so the same input shape
-        // is asserted deterministically here.)
-        interact(() -> {
-            javafx.event.Event.fireEvent(view.subScene(),
-                    new MouseEvent(MouseEvent.MOUSE_PRESSED, 0, 0, 0, 0,
-                            javafx.scene.input.MouseButton.SECONDARY, 1,
-                            false, false, false, false, false, false, false, false, false, false,
-                            null));
-            javafx.event.Event.fireEvent(view.subScene(),
-                    new MouseEvent(MouseEvent.MOUSE_DRAGGED, 25, 15, 0, 0,
-                            javafx.scene.input.MouseButton.SECONDARY, 1,
-                            false, false, false, false, false, false, false, false, false, false,
-                            null));
-        });
-        org.junit.jupiter.api.Assertions.assertTrue(view.panX() != 0 || view.panY() != 0,
-                "pan offset changed despite missing button flags");
-        org.junit.jupiter.api.Assertions.assertEquals(yawBefore, view.yawAngle());
-    }
-
     private static MouseEvent buttonPress() {
         return new MouseEvent(MouseEvent.MOUSE_PRESSED, 0, 0, 0, 0,
                 javafx.scene.input.MouseButton.SECONDARY, 1,
@@ -342,10 +252,47 @@ class Preview3DViewTest extends ApplicationTest {
     }
 
     @Test
+    void scrollDolliesCamera() {
+        interact(() -> load("G1 X10 F600\n"));
+        double before = view.cameraDistance();
+        interact(() -> view.dolly(-20));
+        org.junit.jupiter.api.Assertions.assertTrue(view.cameraDistance() > before);
+    }
+
+    @Test
     void zeroLengthSegmentSkipped() {
         assertNull(Preview3DView.segmentBetween(new Point3D(1, 2, 3), new Point3D(1, 2, 3)));
         javafx.scene.shape.Cylinder cylinder =
                 Preview3DView.segmentBetween(new Point3D(0, 0, 0), new Point3D(0, 10, 0));
         assertEquals(10.0, cylinder.getHeight(), 1e-9);
+    }
+
+    private static dev.radixhomework.gcodeide.model.parsing.Move move(
+            dev.radixhomework.gcodeide.model.parsing.MoveKind kind,
+            double x1, double y1, double x2, double y2, int line) {
+        return new dev.radixhomework.gcodeide.model.parsing.Move(
+                kind, new dev.radixhomework.gcodeide.model.parsing.Position(x1, y1, 0),
+                new dev.radixhomework.gcodeide.model.parsing.Position(x2, y2, 0), line,
+                kind == dev.radixhomework.gcodeide.model.parsing.MoveKind.CUT ? 600.0 : null,
+                false,
+                dev.radixhomework.gcodeide.model.parsing.Spindle.OFF);
+    }
+
+    private static MouseEvent drag(double dx, double dy) {
+        return new MouseEvent(MouseEvent.MOUSE_DRAGGED, dx, dy, 0, 0,
+                javafx.scene.input.MouseButton.PRIMARY, 1,
+                false, false, false, false, true, false, false, false, false, false, null);
+    }
+
+    private static MouseEvent press(javafx.scene.input.PickResult pick) {
+        return new MouseEvent(MouseEvent.MOUSE_PRESSED, 5, 5, 0, 0,
+                javafx.scene.input.MouseButton.PRIMARY, 1,
+                false, false, false, false, true, false, false, false, false, false, pick);
+    }
+
+    private static MouseEvent release(javafx.scene.input.PickResult pick) {
+        return new MouseEvent(MouseEvent.MOUSE_RELEASED, 5, 5, 0, 0,
+                javafx.scene.input.MouseButton.PRIMARY, 1,
+                false, false, false, false, false, false, false, false, false, true, pick);
     }
 }

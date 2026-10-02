@@ -17,10 +17,6 @@ public final class ConfigPaths {
         return baseConfigRoot().resolve(APP_DIR_NAME);
     }
 
-    public static Path profilesDir() {
-        return configDir().resolve("profiles");
-    }
-
     public static Path configFile() {
         return configDir().resolve("config.yaml");
     }

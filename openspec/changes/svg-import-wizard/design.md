@@ -37,7 +37,7 @@ passes loop depth-per-pass down to the final depth; `M5` footer. Y-up: SVG Y
 is flipped at generation time (SVG Y-down → bed Y-up), per the original
 design's producer-side flip. Placement: the wizard computes a translate so
 the scaled bounding box lands at the chosen spot (default: centered with a
-5 mm margin), clamped to the bed — the bed clamp doubles as the
+5 mm margin), clamped to the bed — the free placement doubles as the
 round-trip's inside-the-bed guarantee.
 
 ### D4: Wizard UI — one dialog, three steps in a pane
@@ -54,8 +54,8 @@ completion calls the controller's `loadText` after the existing
 Pure tests: path-data parser goldens (each command, relative forms, arc
 flags), flatten tolerance bound, generator parameter honoring (size, depth
 passes, feeds), and the round-trip — generate from a test SVG, parse with
-`GCodeParser`, assert zero ERROR diagnostics, bed containment, and endpoint
-match within tolerance. One TestFX smoke test drives the menu entry to the
+`GCodeParser`, assert zero ERROR diagnostics, containment within the
+generated geometry's own bounds, and endpoint match within tolerance. One TestFX smoke test drives the menu entry to the
 wizard with a stubbed chooser.
 
 ## Risks / Trade-offs

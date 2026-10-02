@@ -1,9 +1,9 @@
 package dev.radixhomework.gcodeide;
 
-import dev.radixhomework.gcodeide.service.ProfileService;
+import dev.radixhomework.gcodeide.service.ConfigService;
 import dev.radixhomework.gcodeide.util.ConfigPaths;
-import dev.radixhomework.gcodeide.view.UiTheme;
 import dev.radixhomework.gcodeide.view.MainWindowController;
+import dev.radixhomework.gcodeide.view.UiTheme;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.Map;
@@ -23,7 +23,7 @@ public class App extends Application {
 
     private static final String GCODE_FILTER = "G-code files (*.nc, *.gcode, *.ngc, *.tap)";
 
-    private ProfileService profileService;
+    private ConfigService configService;
     private MainWindowController controller;
 
     public static void main(String[] args) {
@@ -48,23 +48,23 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) {
-        profileService = new ProfileService(ConfigPaths.profilesDir(), ConfigPaths.configFile());
+        configService = new ConfigService(ConfigPaths.configFile());
 
         Function<String, Optional<Path>> openChooser = title -> {
             FileChooser dialog = newFileChooser(title, GCODE_FILTER, "*.nc", "*.gcode", "*.ngc", "*.tap");
             return Optional.ofNullable(dialog.showOpenDialog(stage)).map(File::toPath)
                     .map(path -> {
-                        rememberLastDir(path, profileService);
+                        rememberLastDir(path, configService);
                         return path;
                     });
         };
-        controller = MainWindowController.create(profileService, openChooser, suggested -> {
+        controller = MainWindowController.create(openChooser, suggested -> {
             FileChooser dialog = newFileChooser("Save G-code as", GCODE_FILTER,
                     "*.nc", "*.gcode", "*.ngc", "*.tap");
             dialog.setInitialFileName(suggested);
             return Optional.ofNullable(dialog.showSaveDialog(stage)).map(File::toPath)
                     .map(path -> {
-                        rememberLastDir(path, profileService);
+                        rememberLastDir(path, configService);
                         return path;
                     });
         }, suggested -> {
@@ -73,7 +73,7 @@ public class App extends Application {
             dialog.setInitialFileName(suggested);
             return Optional.ofNullable(dialog.showSaveDialog(stage)).map(File::toPath)
                     .map(path -> {
-                        rememberLastDir(path, profileService);
+                        rememberLastDir(path, configService);
                         return path;
                     });
         });
@@ -84,12 +84,12 @@ public class App extends Application {
         // Primer Light is the default when nothing valid was ever selected.
         // app.css (scene stylesheet, higher precedence) layers tokens on top.
         boolean themeRestored = controller.applyTheme(
-                String.valueOf(profileService.loadConfig().get("theme")));
+                String.valueOf(configService.loadConfig().get("theme")));
         if (!themeRestored) {
             atlantafx.base.theme.ThemeManager.instance()
                     .setTheme(new atlantafx.base.theme.PrimerLight());
         }
-        controller.setThemePersister(name -> profileService.updateConfig(c -> c.put("theme", name)));
+        controller.setThemePersister(name -> configService.updateConfig(c -> c.put("theme", name)));
         Scene scene = new Scene(controller.root());
         scene.getStylesheets().add(getClass().getResource("/app.css").toExternalForm());
         stage.setScene(scene);
@@ -101,13 +101,14 @@ public class App extends Application {
                 atlantafx.base.theme.ThemeManager.instance().getTheme()
                         .getUserAgentStylesheet());
         controller.setDarkListener(dark -> UiTheme.applyDark(scene.getRoot(), dark));
-        restoreGeometry(stage, profileService);
+
+        restoreGeometry(stage, configService);
         stage.setOnCloseRequest(event -> {
             if (!controller.promptSaveBeforeClose()) {
                 event.consume();
                 return;
             }
-            saveGeometry(stage, profileService);
+            saveGeometry(stage, configService);
         });
         stage.show();
     }
@@ -116,13 +117,13 @@ public class App extends Application {
         FileChooser dialog = new FileChooser();
         dialog.setTitle(title);
         dialog.getExtensionFilters().add(new FileChooser.ExtensionFilter(filterName, extensions));
-        applyLastDir(dialog, profileService);
+        applyLastDir(dialog, configService);
         return dialog;
     }
 
     /** Starts the dialog in the last used directory, when it still exists. */
-    static void applyLastDir(FileChooser dialog, ProfileService profiles) {
-        if (profiles.loadConfig().get("last_open_dir") instanceof String dir) {
+    static void applyLastDir(FileChooser dialog, ConfigService configs) {
+        if (configs.loadConfig().get("last_open_dir") instanceof String dir) {
             File file = new File(dir);
             if (file.isDirectory()) {
                 dialog.setInitialDirectory(file);
@@ -131,21 +132,21 @@ public class App extends Application {
     }
 
     /** Persists the parent of a successfully used file as the next initial directory. */
-    static void rememberLastDir(Path file, ProfileService profiles) {
+    static void rememberLastDir(Path file, ConfigService configs) {
         Path parent = file.toAbsolutePath().getParent();
         if (parent == null) {
             return;
         }
         try {
-            profiles.updateConfig(config -> config.put("last_open_dir", parent.toString()));
+            configs.updateConfig(config -> config.put("last_open_dir", parent.toString()));
         } catch (RuntimeException e) {
             log.warn("last directory not remembered: {}", e.getMessage());
         }
     }
 
     @SuppressWarnings("unchecked")
-    public static void restoreGeometry(Stage stage, ProfileService profiles) {
-        Object geometry = profiles.loadConfig().get("window_geometry");
+    public static void restoreGeometry(Stage stage, ConfigService configs) {
+        Object geometry = configs.loadConfig().get("window_geometry");
         if (!(geometry instanceof Map<?, ?> map)) {
             return;
         }
@@ -166,9 +167,9 @@ public class App extends Application {
         }
     }
 
-    public static void saveGeometry(Stage stage, ProfileService profiles) {
+    public static void saveGeometry(Stage stage, ConfigService configs) {
         try {
-            profiles.updateConfig(config -> config.put("window_geometry", Map.of(
+            configs.updateConfig(config -> config.put("window_geometry", Map.of(
                     "x", stage.getX(), "y", stage.getY(),
                     "w", stage.getWidth(), "h", stage.getHeight(),
                     "maximized", stage.isMaximized())));

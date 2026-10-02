@@ -3,8 +3,6 @@ package dev.radixhomework.gcodeide.view;
 import dev.radixhomework.gcodeide.model.parsing.Move;
 import dev.radixhomework.gcodeide.model.parsing.MoveKind;
 import dev.radixhomework.gcodeide.model.parsing.ParseResult;
-import dev.radixhomework.gcodeide.model.preview.Diagnostics;
-import dev.radixhomework.gcodeide.model.profiles.MachineProfile;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.IntConsumer;
@@ -21,10 +19,11 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
-import javafx.scene.shape.Box;
 import javafx.scene.shape.Cylinder;
 import javafx.scene.shape.Shape3D;
+import javafx.scene.transform.Affine;
 import javafx.scene.transform.Rotate;
+import javafx.scene.transform.Translate;
 
 /**
  * THE toolpath preview: a 3D perspective view of the toolpath against the
@@ -64,6 +63,7 @@ public class Preview3DView {
     private final Group panGroup = new Group();
     private final javafx.scene.transform.Translate panTranslate =
             new javafx.scene.transform.Translate();
+    private Point3D pan = Point3D.ZERO;
     // orbit camera: yawGroup -> pitchGroup -> camera at translateZ = -distance,
     // so the camera always sits on a sphere around the bed center looking at it.
     // Positive pitch places the camera ABOVE the bed (Y = distance·sin(pitch)).
@@ -76,7 +76,7 @@ public class Preview3DView {
     private final List<Move> segmentMoves = new ArrayList<>();
     private final List<IntConsumer> lineListeners = new ArrayList<>();
 
-    private MachineProfile profile;
+    private double[] bounds = new double[] {0, 0, 300, 180}; // minX, minY, maxX, maxY
     private List<Move> moves = List.of();
     private int currentLine = -1;
     private boolean stale;
@@ -91,8 +91,9 @@ public class Preview3DView {
         Group pitchGroup = new Group();
         pitchGroup.getTransforms().add(pitch);
         camera.setTranslateZ(-cameraDistance);
-        // default far clip (100) is shorter than the bed distance: everything
-        // would be depth-clipped away
+        // the pitch rotation leaves the camera rolled 180 degrees relative to
+        // world up (empirically: Z-up arm rendered downward); un-roll it
+        camera.getTransforms().add(new Rotate(180, Rotate.Z_AXIS));
         camera.setNearClip(0.1);
         camera.setFarClip(20000);
         pitchGroup.getChildren().add(camera);
@@ -104,6 +105,10 @@ public class Preview3DView {
         subScene = new SubScene(root, 100, 100, true,
                 javafx.scene.SceneAntialiasing.BALANCED);
         subScene.setFill(palette.viewport()); // darker than the bed so the plane reads
+        camera.setNearClip(0.1);
+        // the default far clip (100) is shorter than the orbit distance:
+        // everything would be depth-clipped away
+        camera.setFarClip(20000);
         subScene.setCamera(camera);
         subScene.widthProperty().bind(wrapper.widthProperty());
         subScene.heightProperty().bind(wrapper.heightProperty());
@@ -139,6 +144,11 @@ public class Preview3DView {
         return wrapper;
     }
 
+    /** The camera (tests / diagnostics). */
+    public javafx.scene.PerspectiveCamera camera() {
+        return camera;
+    }
+
     /** The SubScene, for tests firing events. */
     public SubScene subScene() {
         return subScene;
@@ -164,12 +174,8 @@ public class Preview3DView {
         return deepest;
     }
 
-    /** Base color for a segment: out-of-bed, rapid, or depth ramp for cuts. */
-    public static Color segmentColor(Move move, boolean outOfBed, double deepestCutZ,
-            PreviewPalette palette) {
-        if (outOfBed) {
-            return palette.outOfBed();
-        }
+    /** Base color for a segment: rapid tone or the depth ramp for cuts. */
+    public static Color segmentColor(Move move, double deepestCutZ, PreviewPalette palette) {
         if (move.kind() == MoveKind.RAPID) {
             return palette.rapid();
         }
@@ -179,14 +185,16 @@ public class Preview3DView {
     // -- world mapping ----------------------------------------------------------------
 
     /**
-     * Bed coordinates to centered 3D world coordinates: bed X → X (centered),
-     * G-code Z → Y (negative down: deeper is lower), bed Y → −Z (centered) —
-     * the negation keeps the mapping orientation-preserving so a top-down
-     * view shows bed +Y toward the top of the screen, like the canonical 2D
-     * orientation, and arcs curve the same way as in bed coordinates.
+     * Bed coordinates to centered 3D world coordinates: X centered on the
+     * content bounds, G-code Z → Y (negative down: deeper is lower), bed
+     * Y → −Z centered — the negation keeps the mapping orientation-preserving
+     * so a top-down view shows bed +Y toward the top of the screen, like the
+     * canonical 2D orientation, and arcs curve the same way as in bed
+     * coordinates.
      */
-    public static Point3D toWorld(double x, double y, double z, MachineProfile profile) {
-        return new Point3D(x - profile.bedX() / 2, z, profile.bedY() / 2 - y);
+    public Point3D toWorld(double x, double y, double z) {
+        return new Point3D(x - (bounds[0] + bounds[2]) / 2, z,
+                (bounds[1] + bounds[3]) / 2 - y);
     }
 
     /** A cylinder from {@code from} to {@code to}, or null for zero-length segments. */
@@ -212,16 +220,6 @@ public class Preview3DView {
 
     // -- profile & toolpath ---------------------------------------------------------------
 
-    public void setProfile(MachineProfile profile) {
-        this.profile = profile;
-        rebuild();
-        fitCameraDistance();
-    }
-
-    public MachineProfile profile() {
-        return profile;
-    }
-
     /** Shows the parsed toolpath, or keeps the last good scene when unparseable. */
     public void setToolpath(ParseResult result) {
         if (result.hasErrors()) {
@@ -229,8 +227,26 @@ public class Preview3DView {
             return;
         }
         moves = result.moves();
+        bounds = contentBounds(moves);
         setStale(false);
         rebuild();
+        fitCameraDistance();
+    }
+
+    /** Content bounds over all move endpoints (mm); a default frame when empty. */
+    public static double[] contentBounds(List<Move> moves) {
+        double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+        for (Move move : moves) {
+            minX = Math.min(minX, Math.min(move.start().x(), move.end().x()));
+            minY = Math.min(minY, Math.min(move.start().y(), move.end().y()));
+            maxX = Math.max(maxX, Math.max(move.start().x(), move.end().x()));
+            maxY = Math.max(maxY, Math.max(move.start().y(), move.end().y()));
+        }
+        if (!Double.isFinite(minX)) {
+            return new double[] {0, 0, 300, 180};
+        }
+        return new double[] {minX, minY, maxX, maxY};
     }
 
     public boolean isStale() {
@@ -323,11 +339,8 @@ public class Preview3DView {
                 -distance * Math.cos(pitch) * Math.cos(yaw));
     }
 
-    /** True when the bed fits inside the camera's view cone and clip range. */
-    public boolean bedVisibleFromCamera() {
-        if (profile == null) {
-            return false;
-        }
+    /** True when the content bounds fit inside the camera's view cone and clip range. */
+    public boolean contentVisibleFromCamera() {
         double distance = cameraDistance;
         if (cameraFarClip() <= distance) {
             return false;
@@ -335,13 +348,11 @@ public class Preview3DView {
         Point3D position = cameraPosition(yaw.getAngle(), pitch.getAngle(), distance);
         Point3D forward = position.normalize().multiply(-1); // orbit: looks at origin
         double halfFovRad = Math.toRadians(14); // ~30° vertical FOV with margin
-        for (double x : new double[] {-profile.bedX() / 2, profile.bedX() / 2}) {
-            for (double z : new double[] {-profile.bedY() / 2, profile.bedY() / 2}) {
-                for (double y : new double[] {0, -5}) {
-                    Point3D corner = new Point3D(x, y, z).subtract(position).normalize();
-                    if (Math.acos(corner.dotProduct(forward)) > halfFovRad) {
-                        return false;
-                    }
+        for (double x : new double[] {bounds[0], bounds[2]}) {
+            for (double y : new double[] {bounds[1], bounds[3]}) {
+                Point3D corner = toWorld(x, y, 0).subtract(position).normalize();
+                if (Math.acos(corner.dotProduct(forward)) > halfFovRad) {
+                    return false;
                 }
             }
         }
@@ -384,27 +395,17 @@ public class Preview3DView {
         movesGroup.getChildren().clear();
         segmentNodes.clear();
         segmentMoves.clear();
-        if (profile == null) {
-            return;
-        }
-        Box bed = new Box(profile.bedX(), 1.0, profile.bedY());
-        bed.setMaterial(new PhongMaterial(palette.bed()));
-        bed.setTranslateY(-0.5); // top surface at Y = 0
-        movesGroup.getChildren().add(bed);
-        segmentNodes.add(bed); // placeholder keeps indices aligned; not a segment
-        segmentMoves.add(null);
 
         double deepest = deepestCutZ(moves);
         for (Move move : moves) {
-            Point3D from = toWorld(move.start().x(), move.start().y(), move.start().z(), profile);
-            Point3D to = toWorld(move.end().x(), move.end().y(), move.end().z(), profile);
+            Point3D from = toWorld(move.start().x(), move.start().y(), move.start().z());
+            Point3D to = toWorld(move.end().x(), move.end().y(), move.end().z());
             Cylinder segment = segmentBetween(from, to);
             if (segment == null) {
                 continue;
             }
             segment.setMaterial(new PhongMaterial(
-                    segmentColor(move, Diagnostics.moveOutOfBed(move, profile), deepest,
-                            palette)));
+                    segmentColor(move, deepest, palette)));
             segment.setUserData(move.line());
             movesGroup.getChildren().add(segment);
             segmentNodes.add(segment);
@@ -417,19 +418,25 @@ public class Preview3DView {
         double deepest = deepestCutZ(moves);
         for (int i = 0; i < segmentMoves.size(); i++) {
             Move move = segmentMoves.get(i);
-            if (move == null) {
-                continue; // bed placeholder
-            }
             Shape3D node = segmentNodes.get(i);
-            PhongMaterial material = new PhongMaterial(segmentColor(move,
-                    profile != null && Diagnostics.moveOutOfBed(move, profile), deepest,
-                    palette));
+            PhongMaterial material = new PhongMaterial(
+                    segmentColor(move, deepest, palette));
             if (move.line() == currentLine) {
                 material.setDiffuseColor(palette.highlight());
                 material.setSpecularColor(Color.ORANGE);
             }
             node.setMaterial(material);
         }
+    }
+
+    /** Routes the orbit state into the rig transforms. */
+    private void applyCamera() {
+        yaw.setAngle(yaw.getAngle());
+        pitch.setAngle(pitch.getAngle());
+        panTranslate.setX(pan.getX());
+        panTranslate.setY(pan.getY());
+        panTranslate.setZ(pan.getZ());
+        camera.setTranslateZ(-cameraDistance);
     }
 
     private void setStale(boolean value) {
@@ -453,20 +460,22 @@ public class Preview3DView {
         }
         // harden for real-world event shapes: the initiating button decides,
         // with the secondary flag and middle button as additional pan paths
-        boolean pan = pressButton == javafx.scene.input.MouseButton.SECONDARY
+        boolean panGesture = pressButton == javafx.scene.input.MouseButton.SECONDARY
                 || pressButton == javafx.scene.input.MouseButton.MIDDLE
                 || event.isSecondaryButtonDown();
-        if (pan) {
+        if (panGesture) {
             Point3D delta = panDelta(yaw.getAngle(), pitch.getAngle(), cameraDistance,
                     event.getX() - pressPoint.getX(), event.getY() - pressPoint.getY());
-            panTranslate.setX(panTranslate.getX() + delta.getX());
-            panTranslate.setY(panTranslate.getY() + delta.getY());
-            panTranslate.setZ(panTranslate.getZ() + delta.getZ());
+            pan = pan.add(delta);
+            panTranslate.setX(pan.getX());
+            panTranslate.setY(pan.getY());
+            panTranslate.setZ(pan.getZ());
         } else if (pressButton == javafx.scene.input.MouseButton.PRIMARY
                 || event.isPrimaryButtonDown()) {
             yaw.setAngle(yaw.getAngle() - (event.getX() - pressPoint.getX()) * 0.4);
             pitch.setAngle(Math.max(-89,
                     Math.min(89, pitch.getAngle() + (event.getY() - pressPoint.getY()) * 0.4)));
+            applyCamera();
         }
         pressPoint = new Point2D(event.getX(), event.getY());
         event.consume();
@@ -504,18 +513,14 @@ public class Preview3DView {
     public void dolly(double deltaY) {
         double factor = deltaY > 0 ? 0.9 : 1.0 / 0.9;
         cameraDistance = Math.max(50, Math.min(5000, cameraDistance * factor));
-        placeCamera();
+        applyCamera();
     }
 
-    /** Frames the bed: far enough that its corners fit the ~30° vertical FOV. */
+    /** Frames the content: far enough that its corners fit the ~30° vertical FOV. */
     private void fitCameraDistance() {
-        if (profile != null) {
-            cameraDistance = Math.max(profile.bedX(), profile.bedY()) * 2.5;
-        }
-        placeCamera();
+        double extent = Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]);
+        cameraDistance = Math.max(150, extent * 2.5);
+        applyCamera();
     }
 
-    private void placeCamera() {
-        camera.setTranslateZ(-cameraDistance);
-    }
 }

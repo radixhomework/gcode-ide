@@ -16,7 +16,7 @@ The application SHALL provide a File > Import Image... action that opens an imag
 - **THEN** Open filters G-code files and Import Image filters image files (SVG for now)
 
 ### Requirement: Wizard collects import parameters
-The wizard SHALL collect, with sensible defaults: the drawing's target size on the bed (scale), its placement, the final cutting depth expressed as a depth per pass, the cutting feed, the rapid/safe height, and the spindle speed. It SHALL show the computed size in millimeters before generation, and SHALL list any unsupported or ignored SVG constructs as warnings. Completing the wizard generates the program.
+The wizard SHALL collect, with sensible defaults: the drawing's target size (scale), its placement, the final cutting depth expressed as a depth per pass, the cutting feed, the rapid/safe height, and the spindle speed. It SHALL show the computed size in millimeters before generation, and SHALL list any unsupported or ignored SVG constructs as warnings. Completing the wizard generates the program.
 
 #### Scenario: Defaults are ready to use
 - **WHEN** the wizard opens on an importable drawing
@@ -38,7 +38,7 @@ The generator SHALL convert the drawing's stroked geometry into a GRBL program i
 - **THEN** the generated program contains two cut runs — one open, one closed — separated by rapid moves, with plunges per depth pass
 
 #### Scenario: Parameters are honored
-- **WHEN** the wizard requested a 100 mm wide placement and 2 passes of 0.5 mm
+- **WHEN** the wizard requested a 100 mm width and 2 passes of 0.5 mm
 - **THEN** the generated geometry is 100 mm wide at the chosen placement, cutting at Z −0.5 and Z −1.0, at the chosen feed and spindle speed
 
 #### Scenario: Curvature within tolerance
@@ -53,8 +53,8 @@ Completing the wizard SHALL load the generated program into the editor as a new,
 - **THEN** the current document is saved and the generated program opens as a new untitled-imported document with preview and statistics live
 
 ### Requirement: Round-trip validity
-Generated programs SHALL parse with the application's GRBL parser without error diagnostics, SHALL keep all cut geometry inside the bed at the chosen placement, and SHALL reproduce the imported geometry's endpoints within the stated tolerance.
+Generated programs SHALL parse with the application's GRBL parser without error diagnostics and SHALL reproduce the imported geometry's endpoints within the stated tolerance.
 
 #### Scenario: Round trip through the parser
 - **WHEN** a generated program is parsed
-- **THEN** it yields no error diagnostics, all cut moves lie within the bed placement, and each run's endpoints match the imported geometry within tolerance
+- **THEN** it yields no error diagnostics, and each run's endpoints match the imported geometry within tolerance

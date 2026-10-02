@@ -4,14 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.radixhomework.gcodeide.service.ConfigService;
 import dev.radixhomework.gcodeide.service.DocumentService.SaveDecision;
-import dev.radixhomework.gcodeide.service.ProfileService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.Test;
@@ -24,7 +23,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
     @TempDir
     Path dir;
 
-    private ProfileService profileService;
+    private ConfigService configService;
     private MainWindowController controller;
     private Path saveTarget;
     private final java.util.concurrent.atomic.AtomicReference<Path> previewImageTarget =
@@ -32,16 +31,9 @@ class MainWindowIntegrationTest extends ApplicationTest {
 
     @Override
     public void start(Stage stage) throws IOException {
-        Path userProfiles = Files.createDirectories(dir.resolve("profiles"));
-        Files.writeString(userProfiles.resolve("wide.yaml"), """
-                name: Wide Mill
-                bed: { x: 400.0, y: 200.0, z: 45.0 }
-                feeds: { max_cut: 800.0, max_rapid: 1000.0 }
-                safe_z: 5.0
-                """);
-        profileService = new ProfileService(userProfiles, dir.resolve("config.yaml"));
+        configService = new ConfigService(dir.resolve("config.yaml"));
         saveTarget = dir.resolve("saved.nc");
-        controller = MainWindowController.create(profileService,
+        controller = MainWindowController.create(
                 title -> Optional.empty(),
                 suggested -> Optional.of(saveTarget),
                 suggested -> Optional.ofNullable(previewImageTarget.get()));
@@ -50,7 +42,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
         stage.show();
     }
 
-    // --- task 7.2: debounced live re-parse ----------------------------------------
+    // --- debounced live re-parse -----------------------------------------------
 
     @Test
     void debounceUpdatesPreviewAndStatus() throws Exception {
@@ -70,7 +62,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
         assertEquals(2, controller.getPreview().segmentCount());
     }
 
-    // --- task 7.3: status bar & profile selector -------------------------------------
+    // --- status bar ---------------------------------------------------------------
 
     @Test
     void statisticsRenderedForKnownProgram() throws Exception {
@@ -84,6 +76,13 @@ class MainWindowIntegrationTest extends ApplicationTest {
     }
 
     @Test
+    void missingFeedWarningShown() throws Exception {
+        interact(() -> controller.loadText("G1 X10\n"));
+        waitUntil(() -> "1 warning(s)".equals(controller.warningsText()));
+        assertTrue(controller.warningsTooltip().contains("without a commanded feed"));
+    }
+
+    @Test
     void caretPositionShownInStatus() {
         interact(() -> controller.loadText("G1 X10\nG1 X20\n"));
         interact(() -> controller.getEditor().gotoLine(2));
@@ -91,27 +90,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
         assertTrue(controller.posText().startsWith("2:"));
     }
 
-    @Test
-    void warningsUseTheInternalDefaultProfile() throws Exception {
-        // the Machine dropdown was removed; the internal default profile
-        // still drives out-of-bed checks and the preview bed
-        interact(() -> controller.loadText("G1 X350 F600\n"));
-        waitUntil(() -> "1 warning(s)".equals(controller.warningsText()));
-        assertTrue(controller.warningsTooltip().contains("300"));
-        assertEquals(300.0, controller.getPreview().profile().bedX());
-    }
-
-    // --- task 7.4: config persistence -----------------------------------------------
-
-    @Test
-    void selectedProfileActiveAfterConfigReload() throws IOException {
-        interact(() -> controller.selectProfile("Wide Mill"));
-        ProfileService reloaded = new ProfileService(
-                dir.resolve("profiles"), dir.resolve("config.yaml"));
-        assertEquals("Wide Mill", reloaded.active().name());
-        Map<String, Object> config = reloaded.loadConfig();
-        assertEquals("Wide Mill", config.get("active_profile"));
-    }
+    // --- config persistence ---------------------------------------------------------
 
     @Test
     void geometryRoundTripsThroughConfig() {
@@ -119,9 +98,9 @@ class MainWindowIntegrationTest extends ApplicationTest {
             Stage stage = new Stage();
             stage.setWidth(777);
             stage.setHeight(555);
-            dev.radixhomework.gcodeide.App.saveGeometry(stage, profileService);
+            dev.radixhomework.gcodeide.App.saveGeometry(stage, configService);
             Stage restored = new Stage();
-            dev.radixhomework.gcodeide.App.restoreGeometry(restored, profileService);
+            dev.radixhomework.gcodeide.App.restoreGeometry(restored, configService);
             assertEquals(777, restored.getWidth());
             assertEquals(555, restored.getHeight());
             stage.close();
@@ -129,7 +108,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
         });
     }
 
-    // --- task 7.1: document lifecycle through the controller ---------------------------
+    // --- document lifecycle through the controller ------------------------------------
 
     @Test
     void saveClearsModifiedThroughController() {
@@ -159,39 +138,13 @@ class MainWindowIntegrationTest extends ApplicationTest {
         assertTrue(controller.titleProperty().get().contains("part.nc"));
     }
 
-    // --- task 8.1: demo.nc end to end ----------------------------------------------------
-
-    @Test
-    void demoProgramEndToEnd() throws Exception {
-        Path demo = dir.resolve("demo.nc");
-        try (var in = getClass().getResourceAsStream("/assets/examples/demo.nc")) {
-            Files.copy(in, demo, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        }
-        interact(() -> assertTrue(controller.openFile(demo)));
-        assertFalse(controller.getPreview().isStale());
-        waitUntil(() -> controller.getPreview().segmentCount() > 50);
-
-        String stats = controller.statsText();
-        assertTrue(stats.contains("bbox 10.0..75.0 x 10.0..30.0 mm"), stats);
-        assertTrue(stats.contains("cut 118.0 mm"), stats);
-        assertTrue(stats.contains("rapid 664.4 mm"), stats);
-        assertTrue(stats.contains("est. 0.9 min"), stats);
-
-        assertEquals("1 warning(s)", controller.warningsText());
-        assertTrue(controller.warningsTooltip().contains("300x180"), controller.warningsTooltip());
-        assertTrue(controller.warningsTooltip().contains("16"), controller.warningsTooltip());
-
-        interact(() -> controller.getEditor().gotoLine(8)); // the G2 arc line
-        waitUntil(() -> controller.getPreview().highlightCount() > 1);
-    }
-
-    // --- 3D preview integration ----------------------------------------------------------
+    // --- 3D preview integration ---------------------------------------------------------
 
     @Test
     void previewIs3dAndSyncsBothDirections() throws Exception {
         interact(() -> controller.loadText("G0 X10\nG1 X20 F600\n"));
         waitUntil(() -> controller.getPreview().segmentCount() == 2);
-        assertEquals(3, controller.getPreview().renderedNodes(), "bed box + 2 cylinders");
+        assertEquals(2, controller.getPreview().renderedNodes(), "one cylinder per move");
         assertFalse(controller.getPreview().isStale());
 
         // editor -> preview highlight
@@ -232,9 +185,9 @@ class MainWindowIntegrationTest extends ApplicationTest {
 
     @Test
     void settingsApplyCommitsPersistsAndStaysOpen() {
-        interact(() -> controller.applyTheme("Primer Light"));
         interact(() -> controller.setThemePersister(
-                name -> profileService.updateConfig(c -> c.put("theme", name))));
+                name -> configService.updateConfig(c -> c.put("theme", name))));
+        interact(() -> controller.applyTheme("Primer Light"));
         var dialog = new java.util.concurrent.atomic.AtomicReference<SettingsDialog>();
         interact(() -> {
             controller.onOpenSettings();
@@ -246,30 +199,14 @@ class MainWindowIntegrationTest extends ApplicationTest {
         interact(() -> dialog.get().themeComboForTest().getSelectionModel().select("Nord Dark"));
         assertEquals("Primer Light",
                 atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
-        assertEquals(null, profileService.loadConfig().get("theme"));
+        assertEquals(null, configService.loadConfig().get("theme"));
 
         // Apply: commits + persists, dialog stays open
         interact(() -> dialog.get().buttonFor(javafx.scene.control.ButtonType.APPLY).fire());
         assertEquals("Nord Dark",
                 atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
-        assertEquals("Nord Dark", profileService.loadConfig().get("theme"));
+        assertEquals("Nord Dark", configService.loadConfig().get("theme"));
         assertTrue(dialog.get().isShowing(), "Apply keeps the window open");
-    }
-
-    private SettingsDialog dialogWithCloseFlag(java.util.concurrent.atomic.AtomicBoolean closed,
-            java.util.function.Consumer<String> commit) {
-        // closeWindow is overridden: real Stage.hide() hangs in the test JVM
-        // (Platform.startup environment), while the real app closes normally
-        return new SettingsDialog(
-                List.of(new atlantafx.base.theme.PrimerLight(),
-                        new atlantafx.base.theme.PrimerDark(),
-                        new atlantafx.base.theme.Dracula()),
-                "Primer Light", commit) {
-            @Override
-            void closeWindow() {
-                closed.set(true);
-            }
-        };
     }
 
     @Test
@@ -308,6 +245,17 @@ class MainWindowIntegrationTest extends ApplicationTest {
     }
 
     @Test
+    void restorePathAppliesWithoutPersistingAndRejectsUnknown() {
+        interact(() -> assertTrue(controller.applyTheme("Primer Dark")));
+        assertEquals("Primer Dark",
+                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
+        assertEquals(null, configService.loadConfig().get("theme"));
+        interact(() -> assertTrue(!controller.applyTheme("No Such Theme")));
+        assertEquals("Primer Dark",
+                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
+    }
+
+    @Test
     void darkFlagTogglesEditorAndPreviewWithTheme() {
         interact(() -> assertTrue(controller.applyTheme("Primer Dark")));
         assertTrue(dev.radixhomework.gcodeide.view.UiTheme.isDark(controller.getEditor().node()),
@@ -320,17 +268,6 @@ class MainWindowIntegrationTest extends ApplicationTest {
     }
 
     @Test
-    void restorePathAppliesWithoutPersistingAndRejectsUnknown() {
-        interact(() -> assertTrue(controller.applyTheme("Primer Dark")));
-        assertEquals("Primer Dark",
-                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
-        assertEquals(null, profileService.loadConfig().get("theme"));
-        interact(() -> assertTrue(!controller.applyTheme("No Such Theme")));
-        assertEquals("Primer Dark",
-                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
-    }
-
-    @Test
     void restartRequiredRowCarriesTheMention() {
         var row = (javafx.scene.layout.VBox) SettingsDialog.restartRequiredRow(
                 new javafx.scene.control.Label("setting"));
@@ -340,7 +277,50 @@ class MainWindowIntegrationTest extends ApplicationTest {
                 "the restart mention is part of the wrapped row");
     }
 
+    // --- demo.nc end to end ---------------------------------------------------------------
+
+    @Test
+    void demoProgramEndToEnd() throws Exception {
+        Path demo = dir.resolve("demo.nc");
+        try (var in = getClass().getResourceAsStream("/assets/examples/demo.nc")) {
+            Files.copy(in, demo, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+        interact(() -> assertTrue(controller.openFile(demo)));
+        assertFalse(controller.getPreview().isStale());
+        waitUntil(() -> controller.getPreview().segmentCount() > 50);
+
+        String stats = controller.statsText();
+        assertTrue(stats.contains("bbox 10.0..75.0 x 10.0..30.0 mm"), stats);
+        assertTrue(stats.contains("cut 118.0 mm"), stats);
+        assertTrue(stats.contains("rapid 664.4 mm"), stats);
+        // cut-only estimate: 118 mm at 600 mm/min
+        assertTrue(stats.contains("est. 0.2 min"), stats);
+
+        // machine-profile-free: no out-of-bed / feed-cap warnings; the demo
+        // commands a feed on every cut, so it is warning-free
+        assertEquals("", controller.warningsText());
+
+        interact(() -> controller.getEditor().gotoLine(8)); // the G2 arc line
+        waitUntil(() -> controller.getPreview().highlightCount() > 1);
+    }
+
     // -- helpers -----------------------------------------------------------------
+
+    private SettingsDialog dialogWithCloseFlag(java.util.concurrent.atomic.AtomicBoolean closed,
+            java.util.function.Consumer<String> commit) {
+        // closeWindow is overridden: real Stage.hide() hangs in the test JVM
+        // (Platform.startup environment), while the real app closes normally
+        return new SettingsDialog(
+                List.of(new atlantafx.base.theme.PrimerLight(),
+                        new atlantafx.base.theme.PrimerDark(),
+                        new atlantafx.base.theme.Dracula()),
+                "Primer Light", commit) {
+            @Override
+            void closeWindow() {
+                closed.set(true);
+            }
+        };
+    }
 
     private static javafx.scene.input.MouseEvent pickPress(javafx.scene.input.PickResult pick) {
         return new javafx.scene.input.MouseEvent(javafx.scene.input.MouseEvent.MOUSE_PRESSED,
@@ -353,6 +333,8 @@ class MainWindowIntegrationTest extends ApplicationTest {
                 5, 5, 0, 0, javafx.scene.input.MouseButton.PRIMARY, 1,
                 false, false, false, false, false, false, false, false, false, true, pick);
     }
+
+    // -- helpers -----------------------------------------------------------------
 
     private static void waitUntil(java.util.function.BooleanSupplier condition)
             throws InterruptedException {

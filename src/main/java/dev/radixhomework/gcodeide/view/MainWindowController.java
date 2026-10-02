@@ -4,12 +4,10 @@ import dev.radixhomework.gcodeide.model.parsing.ParseResult;
 import dev.radixhomework.gcodeide.model.preview.Diagnostics;
 import dev.radixhomework.gcodeide.model.preview.ToolpathStats;
 import dev.radixhomework.gcodeide.model.preview.ToolpathWarning;
-import dev.radixhomework.gcodeide.model.profiles.MachineProfile;
 import dev.radixhomework.gcodeide.service.DocumentService;
 import dev.radixhomework.gcodeide.service.DocumentService.PathChooser;
 import dev.radixhomework.gcodeide.service.DocumentService.SaveDecision;
 import dev.radixhomework.gcodeide.service.ParseService;
-import dev.radixhomework.gcodeide.service.ProfileService;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URL;
@@ -33,7 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Wires the editor and preview views to the backend services: document
  * actions, debounced live re-parse (300 ms), status bar statistics/warnings,
- * profile selection, and the window title.
+ * and the window title.
  */
 @Slf4j
 public class MainWindowController {
@@ -64,8 +62,6 @@ public class MainWindowController {
     @Getter
     private final Preview3DView preview = new Preview3DView();
     @Getter
-    private final ProfileService profileService;
-    @Getter
     private final DocumentService documentService;
     @Getter
     private final ParseService parseService = new ParseService();
@@ -80,19 +76,19 @@ public class MainWindowController {
     private javafx.scene.Parent rootNode;
 
     /** Loads the FXML with this controller; used by App and by GUI tests. */
-    public static MainWindowController create(ProfileService profileService,
+    public static MainWindowController create(
             Function<String, Optional<Path>> openChooser, PathChooser saveAsChooser) {
-        return create(profileService, openChooser, saveAsChooser, suggested -> Optional.empty());
+        return create(openChooser, saveAsChooser, suggested -> Optional.empty());
     }
 
-    public static MainWindowController create(ProfileService profileService,
+    public static MainWindowController create(
             Function<String, Optional<Path>> openChooser, PathChooser saveAsChooser,
             PathChooser previewImageChooser) {
         try {
             URL fxml = MainWindowController.class.getResource("/view/MainWindow.fxml");
             FXMLLoader loader = new FXMLLoader(fxml);
             MainWindowController controller = new MainWindowController(
-                    profileService, openChooser,
+                    openChooser,
                     new DocumentService(displayName -> SaveDecision.CANCEL, saveAsChooser),
                     previewImageChooser);
             loader.setController(controller);
@@ -121,15 +117,14 @@ public class MainWindowController {
         };
     }
 
-    public MainWindowController(ProfileService profileService,
+    public MainWindowController(
             Function<String, Optional<Path>> openChooser, DocumentService documentService) {
-        this(profileService, openChooser, documentService, suggested -> Optional.empty());
+        this(openChooser, documentService, suggested -> Optional.empty());
     }
 
-    public MainWindowController(ProfileService profileService,
+    public MainWindowController(
             Function<String, Optional<Path>> openChooser, DocumentService documentService,
             PathChooser previewImageChooser) {
-        this.profileService = profileService;
         this.openChooser = openChooser;
         this.documentService = documentService;
         this.previewImageChooser = previewImageChooser;
@@ -139,10 +134,6 @@ public class MainWindowController {
     public void initialize() {
         splitPane.getItems().addAll(editor.node(), preview.node());
         splitPane.setDividerPositions(0.5);
-
-        if (profileService.active() != null) {
-            preview.setProfile(profileService.active());
-        }
 
         editor.addCaretListener((line, column) -> posLabel.setText(line + ":" + column));
         editor.addCurrentLineListener(preview::setCurrentLine);
@@ -323,32 +314,20 @@ public class MainWindowController {
 
     private SettingsDialog lastSettingsDialog;
 
-    /** Applies a profile by name through the internal service (tests). */
-    public void selectProfile(String name) {
-        profileService.select(name);
-        preview.setProfile(profileService.active());
-        refreshStatus();
-    }
-
-    public String activeProfileName() {
-        return profileService.active() == null ? "" : profileService.active().name();
-    }
-
     public void reparseNow() {
         parseService.parse(editor.getText());
     }
 
     void refreshStatus() {
         ParseResult result = parseService.lastGood();
-        MachineProfile profile = profileService.active();
-        if (result == null || profile == null) {
+        if (result == null) {
             statsLabel.setText("");
             warningsLabel.setText("");
             warningsLabel.setTooltip(null);
             return;
         }
-        ToolpathStats stats = Diagnostics.computeStatistics(result, profile);
-        List<ToolpathWarning> warnings = Diagnostics.computeWarnings(result, profile);
+        ToolpathStats stats = Diagnostics.computeStatistics(result);
+        List<ToolpathWarning> warnings = Diagnostics.computeWarnings(result);
         String bboxText = stats.cutBBox() == null ? "bbox -"
                 : String.format(java.util.Locale.ROOT, "bbox %.1f..%.1f x %.1f..%.1f mm",
                         stats.cutBBox().minX(), stats.cutBBox().maxX(),

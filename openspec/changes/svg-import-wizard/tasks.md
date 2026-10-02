@@ -9,7 +9,7 @@
 ## 2. G-code generator (model/svg)
 
 - [ ] 2.1 Implement `GCodeGenerator` (program shape per design D3: header, spindle, safe-Z rapids, per-pass plunges, cut runs, footer; SVG Y flip; scale/place/clamp to bed) with pure tests: parameter honoring (100 mm width, 2×0.5 mm passes, feed, spindle), Y-flip orientation marker, bed clamping
-- [ ] 2.2 Implement the round-trip test: generate from the fixture SVG, parse with `GCodeParser`, assert zero ERROR diagnostics, bed containment, run count, and endpoint match within tolerance
+- [ ] 2.2 Implement the round-trip test: generate from the fixture SVG, parse with `GCodeParser`, assert zero ERROR diagnostics, bounds containment, run count, and endpoint match within tolerance
 
 ## 3. Wizard UI and wiring
 
