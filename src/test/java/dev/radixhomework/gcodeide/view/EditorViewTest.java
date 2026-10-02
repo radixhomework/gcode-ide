@@ -151,6 +151,25 @@ class EditorViewTest extends ApplicationTest {
         assertTrue(!editor.isDocPopupShowing());
     }
 
+    // --- professional styling -------------------------------------------------------
+
+    @Test
+    void editorRendersInMonospaceFont() {
+        assertTrue(GCodeEditorView.MONO_CANDIDATES.contains(GCodeEditorView.monoFamily())
+                        || GCodeEditorView.monoFamily().equals("Monospaced"),
+                "chosen family is a monospace candidate or the fallback");
+        interact(() -> assertTrue(editor.node().getStyle()
+                        .contains("-fx-font-family"),
+                "area style carries the monospace family"));
+    }
+
+    @Test
+    void suggestionRowsSplitIntoCodeAndDescription() {
+        String[] parts = GCodeEditorView.splitSuggestion("G1 — linear feed move");
+        assertEquals("G1", parts[0]);
+        assertEquals("linear feed move", parts[1]);
+    }
+
     @Test
     void hoverShowsDocumentationAfterDelay() throws Exception {
         editor.setHoverDocDelayMillis(60);

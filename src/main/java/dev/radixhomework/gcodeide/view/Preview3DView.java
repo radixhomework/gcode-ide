@@ -36,10 +36,19 @@ import javafx.scene.transform.Rotate;
  */
 public class Preview3DView {
 
-    public static final Color BED_COLOR = Color.web("#E8E8E8");
-    public static final Color RAPID_COLOR = Color.web("#808080", 0.55);
-    public static final Color OUT_OF_BED_COLOR = Color.web("#D62728");
-    public static final Color HIGHLIGHT_COLOR = Color.rgb(255, 140, 0);
+    // 3D palettes: LIGHT is the classic light canvas, DARK the theme-dark
+    // variant. The depth-ramp hues are data encoding, not chrome.
+    public record PreviewPalette(Color viewport, Color bed, Color rapid,
+            Color outOfBed, Color highlight) {
+        public static final PreviewPalette LIGHT = new PreviewPalette(
+                Color.web("#e3e7ee"), Color.web("#f5f6f8"),
+                Color.web("#6b7280", 0.55), Color.web("#d62728"), Color.rgb(255, 140, 0));
+        public static final PreviewPalette DARK = new PreviewPalette(
+                Color.web("#1c2128"), Color.web("#2d333b"),
+                Color.web("#9ea7b3", 0.55), Color.web("#f85149"), Color.web("#ffa657"));
+    }
+
+    private PreviewPalette palette = PreviewPalette.LIGHT;
     public static final double SEGMENT_RADIUS_MM = 0.12;
     /** Diagnostic: log every mouse event the SubScene receives (-Dgcodeide.eventlog=true). */
     private static final boolean EVENT_LOG = Boolean.getBoolean("gcodeide.eventlog");
@@ -94,6 +103,7 @@ public class Preview3DView {
         Group root = new Group(panGroup);
         subScene = new SubScene(root, 100, 100, true,
                 javafx.scene.SceneAntialiasing.BALANCED);
+        subScene.setFill(palette.viewport()); // darker than the bed so the plane reads
         subScene.setCamera(camera);
         subScene.widthProperty().bind(wrapper.widthProperty());
         subScene.heightProperty().bind(wrapper.heightProperty());
@@ -111,10 +121,16 @@ public class Preview3DView {
         }
         fitCameraDistance();
 
-        staleBadge.setStyle("-fx-background-color: #C00000; -fx-text-fill: white; -fx-font-weight: bold;");
+        staleBadge.getStyleClass().add("stale-badge");
         staleBadge.setVisible(false);
         staleBadge.setMouseTransparent(true);
         StackPane.setAlignment(staleBadge, javafx.geometry.Pos.TOP_LEFT);
+        wrapper.getStyleClass().add("tokens");
+        wrapper.getStylesheets().add(getClass().getResource("/app.css").toExternalForm());
+        // SubScene is not a Region: its min size defaults to its current bounds,
+        // which would freeze the SplitPane divider (the preview could never
+        // shrink). Zero the wrapper's min so the divider moves freely.
+        wrapper.setMinSize(0, 0);
         wrapper.getChildren().addAll(subScene, staleBadge);
     }
 
@@ -131,8 +147,7 @@ public class Preview3DView {
     // -- pure color decisions (shared, headless-testable) ---------------------------
 
     /** Hue ramp blue (Z0) to red (deepest). */
-    public static Color depthColor(double z, double deepestCutZ) {
-        if (deepestCutZ >= 0) {
+    public static Color depthColor(double z, double deepestCutZ) {        if (deepestCutZ >= 0) {
             return Color.hsb(SHALLOW_HUE, 0.78, 0.71);
         }
         double t = Math.max(0.0, Math.min(1.0, z / deepestCutZ));
@@ -149,13 +164,14 @@ public class Preview3DView {
         return deepest;
     }
 
-    /** Base color for a segment: red out-of-bed, gray rapid, depth ramp for cuts. */
-    public static Color segmentColor(Move move, boolean outOfBed, double deepestCutZ) {
+    /** Base color for a segment: out-of-bed, rapid, or depth ramp for cuts. */
+    public static Color segmentColor(Move move, boolean outOfBed, double deepestCutZ,
+            PreviewPalette palette) {
         if (outOfBed) {
-            return OUT_OF_BED_COLOR;
+            return palette.outOfBed();
         }
         if (move.kind() == MoveKind.RAPID) {
-            return RAPID_COLOR;
+            return palette.rapid();
         }
         return depthColor(move.end().z(), deepestCutZ);
     }
@@ -334,6 +350,17 @@ public class Preview3DView {
 
     // -- sync --------------------------------------------------------------------------
 
+    /** Switches the light/dark canvas palette and restyles live. */
+    public void setDark(boolean dark) {
+        palette = dark ? PreviewPalette.DARK : PreviewPalette.LIGHT;
+        subScene.setFill(palette.viewport());
+        rebuild();
+    }
+
+    public PreviewPalette palette() {
+        return palette;
+    }
+
     public void setCurrentLine(int line) {
         this.currentLine = line;
         restyle();
@@ -345,7 +372,15 @@ public class Preview3DView {
 
     // -- rendering ------------------------------------------------------------------------
 
+    private int rebuildCount;
+
+    /** Number of scene rebuilds (observability for tests). */
+    public int rebuildCount() {
+        return rebuildCount;
+    }
+
     private void rebuild() {
+        rebuildCount++;
         movesGroup.getChildren().clear();
         segmentNodes.clear();
         segmentMoves.clear();
@@ -353,7 +388,7 @@ public class Preview3DView {
             return;
         }
         Box bed = new Box(profile.bedX(), 1.0, profile.bedY());
-        bed.setMaterial(new PhongMaterial(BED_COLOR));
+        bed.setMaterial(new PhongMaterial(palette.bed()));
         bed.setTranslateY(-0.5); // top surface at Y = 0
         movesGroup.getChildren().add(bed);
         segmentNodes.add(bed); // placeholder keeps indices aligned; not a segment
@@ -368,7 +403,8 @@ public class Preview3DView {
                 continue;
             }
             segment.setMaterial(new PhongMaterial(
-                    segmentColor(move, Diagnostics.moveOutOfBed(move, profile), deepest)));
+                    segmentColor(move, Diagnostics.moveOutOfBed(move, profile), deepest,
+                            palette)));
             segment.setUserData(move.line());
             movesGroup.getChildren().add(segment);
             segmentNodes.add(segment);
@@ -386,9 +422,10 @@ public class Preview3DView {
             }
             Shape3D node = segmentNodes.get(i);
             PhongMaterial material = new PhongMaterial(segmentColor(move,
-                    profile != null && Diagnostics.moveOutOfBed(move, profile), deepest));
+                    profile != null && Diagnostics.moveOutOfBed(move, profile), deepest,
+                    palette));
             if (move.line() == currentLine) {
-                material.setDiffuseColor(HIGHLIGHT_COLOR);
+                material.setDiffuseColor(palette.highlight());
                 material.setSpecularColor(Color.ORANGE);
             }
             node.setMaterial(material);

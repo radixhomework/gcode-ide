@@ -23,7 +23,6 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
 import javafx.scene.layout.Region;
@@ -49,8 +48,16 @@ public class MainWindowController {
     private Label statsLabel;
     @FXML
     private Label warningsLabel;
-    @FXML
-    private ComboBox<String> profileCombo;
+
+    /** Installed AtlantaFX themes, in menu order. */
+    private static final List<atlantafx.base.theme.Theme> THEMES = List.of(
+            new atlantafx.base.theme.PrimerLight(),
+            new atlantafx.base.theme.PrimerDark(),
+            new atlantafx.base.theme.NordLight(),
+            new atlantafx.base.theme.NordDark(),
+            new atlantafx.base.theme.CupertinoLight(),
+            new atlantafx.base.theme.CupertinoDark(),
+            new atlantafx.base.theme.Dracula());
 
     @Getter
     private final GCodeEditorView editor = new GCodeEditorView();
@@ -133,19 +140,9 @@ public class MainWindowController {
         splitPane.getItems().addAll(editor.node(), preview.node());
         splitPane.setDividerPositions(0.5);
 
-        profileCombo.getItems()
-                .addAll(profileService.profiles().stream().map(MachineProfile::name).toList());
         if (profileService.active() != null) {
-            profileCombo.getSelectionModel().select(profileService.active().name());
             preview.setProfile(profileService.active());
         }
-        profileCombo.getSelectionModel().selectedItemProperty().addListener((obs, o, name) -> {
-            if (name != null) {
-                profileService.select(name);
-                preview.setProfile(profileService.active());
-                refreshStatus();
-            }
-        });
 
         editor.addCaretListener((line, column) -> posLabel.setText(line + ":" + column));
         editor.addCurrentLineListener(preview::setCurrentLine);
@@ -165,6 +162,8 @@ public class MainWindowController {
         });
 
         documentService.addDocumentListener(this::updateTitle);
+        warningsLabel.visibleProperty().bind(warningsLabel.textProperty().isNotEmpty());
+        warningsLabel.managedProperty().bind(warningsLabel.visibleProperty());
         updateTitle();
     }
 
@@ -252,13 +251,87 @@ public class MainWindowController {
         reparseNow();
     }
 
-    /** Selects a profile by name (writes through to the combo, service, and preview). */
+    /** Applies a theme by name (App restore path); returns false for unknown names.
+     *  Restore does NOT persist — only a settings commit does. */
+    public boolean applyTheme(String name) {
+        var found = THEMES.stream()
+                .filter(t -> t.getName().equals(name))
+                .findFirst();
+        found.ifPresent(t -> {
+            atlantafx.base.theme.ThemeManager.instance().setTheme(t);
+            applyDarkFlag(t);
+        });
+        return found.isPresent();
+    }
+
+    private void applyDarkFlag(atlantafx.base.theme.Theme theme) {
+        boolean dark = theme.isDarkMode();
+        UiTheme.applyDark(editor.node(), dark);
+        UiTheme.applyDark(preview.node(), dark);
+        preview.setDark(dark);
+        if (darkListener != null) {
+            darkListener.accept(dark);
+        }
+    }
+
+    /** Listener for the theme family flag (App restyles the scene root). */
+    public void setDarkListener(java.util.function.Consumer<Boolean> listener) {
+        this.darkListener = listener;
+    }
+
+    private java.util.function.Consumer<Boolean> darkListener = dark -> { };
+
+    /** Persister for the selected theme name (wired by App to the config). */
+    public void setThemePersister(java.util.function.Consumer<String> persister) {
+        this.themePersister = persister;
+    }
+
+    private java.util.function.Consumer<String> themePersister = name -> { };
+
+    /** Commits a theme selection from the settings dialog (apply + persist). */
+    private void commitTheme(String name) {
+        applyTheme(name);
+        // global UA stylesheet: restyles ALL scenes, including the already
+        // created main window (ThemeManager.setTheme alone only covers scenes
+        // created after it)
+        THEMES.stream()
+                .filter(t -> t.getName().equals(name))
+                .findFirst()
+                .ifPresent(t -> javafx.application.Application
+                        .setUserAgentStylesheet(t.getUserAgentStylesheet()));
+        themePersister.accept(name);
+    }
+
+    /** Opens the dedicated settings window (File > Settings...). */
+    @FXML
+    public void onOpenSettings() {
+        lastSettingsDialog = new SettingsDialog(THEMES,
+                atlantafx.base.theme.ThemeManager.instance().getTheme() == null
+                        ? THEMES.get(0).getName()
+                        : atlantafx.base.theme.ThemeManager.instance().getTheme().getName(),
+                this::commitTheme);
+        lastSettingsDialog.setDark(atlantafx.base.theme.ThemeManager.instance()
+                .getTheme() != null
+                && atlantafx.base.theme.ThemeManager.instance().getTheme().isDarkMode());
+        lastSettingsDialog.show();
+    }
+
+    /** The most recently opened settings dialog (tests). */
+    public SettingsDialog lastSettingsDialog() {
+        return lastSettingsDialog;
+    }
+
+    private SettingsDialog lastSettingsDialog;
+
+    /** Applies a profile by name through the internal service (tests). */
     public void selectProfile(String name) {
-        profileCombo.getSelectionModel().select(name);
+        profileService.select(name);
+        preview.setProfile(profileService.active());
+        refreshStatus();
     }
 
     public String activeProfileName() {
-        return profileCombo.getValue();
+        return profileService.active() == null ? "" : profileService.active().name();
     }
 
     public void reparseNow() {

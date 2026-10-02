@@ -23,9 +23,12 @@ editing, live preview, statistics, and out-of-bed warnings working together.
 The preview is a **3D perspective view** where pass depth is directly visible
 (drag to rotate, wheel to zoom, click a segment to jump to its source line).
 While typing, the editor offers **autocompletion with one-line command
-documentation** for the supported G/M codes and parameter words.
+documentation** for the supported G/M codes and parameter words. The editor's
+syntax palette and the 3D preview canvas are **theme-adaptive**: dark themes
+switch both to curated dark palettes.
 **File > Save Preview Image...** exports the current preview as PNG or JPG.
-File dialogs remember the last used directory.
+**File > Settings...** opens a settings window (Apply / OK / Cancel) with
+theme selection; file dialogs remember the last used directory.
 
 ## Machine profiles
 

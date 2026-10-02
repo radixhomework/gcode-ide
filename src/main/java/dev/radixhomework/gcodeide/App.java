@@ -2,6 +2,7 @@ package dev.radixhomework.gcodeide;
 
 import dev.radixhomework.gcodeide.service.ProfileService;
 import dev.radixhomework.gcodeide.util.ConfigPaths;
+import dev.radixhomework.gcodeide.view.UiTheme;
 import dev.radixhomework.gcodeide.view.MainWindowController;
 import java.io.File;
 import java.nio.file.Path;
@@ -79,8 +80,27 @@ public class App extends Application {
         controller.getDocumentService().setPrompt(MainWindowController.alertPrompt());
 
         stage.titleProperty().bind(controller.titleProperty());
+        // persisted theme first (must precede scene creation); AtlantaFX
+        // Primer Light is the default when nothing valid was ever selected.
+        // app.css (scene stylesheet, higher precedence) layers tokens on top.
+        boolean themeRestored = controller.applyTheme(
+                String.valueOf(profileService.loadConfig().get("theme")));
+        if (!themeRestored) {
+            atlantafx.base.theme.ThemeManager.instance()
+                    .setTheme(new atlantafx.base.theme.PrimerLight());
+        }
+        controller.setThemePersister(name -> profileService.updateConfig(c -> c.put("theme", name)));
         Scene scene = new Scene(controller.root());
+        scene.getStylesheets().add(getClass().getResource("/app.css").toExternalForm());
         stage.setScene(scene);
+        // theme-family flag on the scene root (adaptive palettes), then the
+        // global UA stylesheet for every scene created from here on
+        UiTheme.applyDark(scene.getRoot(),
+                atlantafx.base.theme.ThemeManager.instance().getTheme().isDarkMode());
+        javafx.application.Application.setUserAgentStylesheet(
+                atlantafx.base.theme.ThemeManager.instance().getTheme()
+                        .getUserAgentStylesheet());
+        controller.setDarkListener(dark -> UiTheme.applyDark(scene.getRoot(), dark));
         restoreGeometry(stage, profileService);
         stage.setOnCloseRequest(event -> {
             if (!controller.promptSaveBeforeClose()) {

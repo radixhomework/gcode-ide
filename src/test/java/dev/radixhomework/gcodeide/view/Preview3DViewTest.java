@@ -140,16 +140,32 @@ class Preview3DViewTest extends ApplicationTest {
 
     @Test
     void segmentColorDecisions() {
+        var light = Preview3DView.PreviewPalette.LIGHT;
         Move rapid = move(MoveKind.RAPID, 0, 0, 10, 0, 1);
         Move cut = move(MoveKind.CUT, 10, 0, 20, 0, 2);
-        assertEquals(Preview3DView.RAPID_COLOR, Preview3DView.segmentColor(rapid, false, -2.0));
-        assertEquals(Preview3DView.OUT_OF_BED_COLOR, Preview3DView.segmentColor(cut, true, -2.0));
-        assertTrue(!Preview3DView.segmentColor(cut, false, -2.0)
+        assertEquals(light.rapid(), Preview3DView.segmentColor(rapid, false, -2.0, light));
+        assertEquals(light.outOfBed(), Preview3DView.segmentColor(cut, true, -2.0, light));
+        assertTrue(!Preview3DView.segmentColor(cut, false, -2.0, light)
                 .equals(Preview3DView.depthColor(-0.5, -2.0)),
                 "depth ramp distinguishes depths");
         assertTrue(Preview3DView.depthColor(0, -2.0).getHue()
                 > Preview3DView.depthColor(-2, -2.0).getHue(),
                 "hue decreases with depth");
+    }
+
+    @Test
+    void setDarkSwapsPaletteAndRestyles() {
+        interact(() -> {
+            view.setProfile(PROFILE);
+            view.setToolpath(GCodeParser.parse("G1 X10 F600\n"));
+        });
+        assertEquals(Preview3DView.PreviewPalette.LIGHT, view.palette());
+        int rebuilds = view.rebuildCount();
+        interact(() -> view.setDark(true));
+        assertEquals(Preview3DView.PreviewPalette.DARK, view.palette());
+        assertTrue(view.rebuildCount() > rebuilds, "dark switch restyled live");
+        interact(() -> view.setDark(false));
+        assertEquals(Preview3DView.PreviewPalette.LIGHT, view.palette());
     }
 
     private static dev.radixhomework.gcodeide.model.parsing.Move move(
@@ -186,6 +202,14 @@ class Preview3DViewTest extends ApplicationTest {
         double before = view.cameraDistance();
         interact(() -> view.dolly(-20));
         org.junit.jupiter.api.Assertions.assertTrue(view.cameraDistance() > before);
+    }
+
+    @Test
+    void previewCanShrinkInASplitPane() {
+        // regression: SubScene's min size defaults to its current bounds,
+        // which froze the SplitPane divider (the preview could never shrink)
+        assertTrue(view.node().getMinWidth() == 0 && view.node().getMinHeight() == 0,
+                "preview wrapper min sizes are zero so the divider moves freely");
     }
 
     @Test

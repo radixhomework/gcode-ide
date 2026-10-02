@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.IntConsumer;
+import javafx.scene.layout.StackPane;
 import javafx.scene.control.ListView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -39,15 +40,48 @@ public class GCodeEditorView {
 
     public GCodeEditorView() {
         codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
-        codeArea.getStylesheets().add(
-                getClass().getResource("/editor.css").toExternalForm());
+        var stylesheets = codeArea.getStylesheets();
+        stylesheets.add(getClass().getResource("/app.css").toExternalForm());
+        stylesheets.add(getClass().getResource("/editor.css").toExternalForm());
+        // RichTextFX styles the area font via CSS, not setFont
+        codeArea.setStyle("-fx-font-family: '" + monoFamily() + "'; -fx-font-size: 13px;");
+        // let the SplitPane shrink the editor freely
+        codeArea.setMinWidth(0);
         codeArea.plainTextChanges().subscribe(change -> {
             restyleAffected(change.getPosition(), change.getInsertionEnd());
             updateCompletionPopup();
         });
         codeArea.caretPositionProperty().addListener((obs, oldPos, newPos) -> fireCaretMoved());
 
+        suggestionList.getStyleClass().add("completion-list");
         suggestionList.setPrefSize(320, 170);
+        suggestionList.setCellFactory(list -> new javafx.scene.control.ListCell<>() {
+            private final javafx.scene.control.Label code =
+                    new javafx.scene.control.Label();
+            private final javafx.scene.control.Label desc =
+                    new javafx.scene.control.Label();
+            private final javafx.scene.layout.HBox row = new javafx.scene.layout.HBox(8);
+
+            {
+                code.getStyleClass().add("completion-code");
+                desc.getStyleClass().add("completion-desc");
+                row.getChildren().addAll(code, desc);
+                setContentDisplay(javafx.scene.control.ContentDisplay.GRAPHIC_ONLY);
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setGraphic(null);
+                    return;
+                }
+                int cut = item.indexOf(" — ");
+                code.setText(cut < 0 ? item : item.substring(0, cut));
+                desc.setText(cut < 0 ? "" : item.substring(cut + 3));
+                setGraphic(row);
+            }
+        });
         suggestionList.setOnMouseClicked(event -> {
             String chosen = suggestionList.getSelectionModel().getSelectedItem();
             if (chosen != null) {
@@ -58,9 +92,13 @@ public class GCodeEditorView {
         completionPopup.setAutoHide(true);
         codeArea.addEventFilter(KeyEvent.KEY_PRESSED, this::onKeyPressed);
 
-        docLabel.setStyle("-fx-background-color: #FFFFE0; -fx-border-color: #808080;"
-                + " -fx-padding: 4 8 4 8;");
-        docPopup.getContent().add(docLabel);
+        codeArea.addEventFilter(KeyEvent.KEY_PRESSED, this::onKeyPressed);
+
+        docLabel.getStyleClass().add("doc-popup");
+        var docPane = new StackPane(docLabel);
+        docPane.getStyleClass().add("tokens");
+        docPane.getStylesheets().add(getClass().getResource("/app.css").toExternalForm());
+        docPopup.getContent().add(docPane);
         docPopup.setAutoHide(true);
         hoverTimer.setOnFinished(event -> showDocumentationForHover(hoverX, hoverY));
         codeArea.addEventFilter(MouseEvent.MOUSE_MOVED, event -> {
@@ -79,6 +117,18 @@ public class GCodeEditorView {
 
     private double hoverX;
     private double hoverY;
+
+    /** Monospace candidates in preference order (design D3). */
+    static final List<String> MONO_CANDIDATES =
+            List.of("Consolas", "Menlo", "DejaVu Sans Mono", "Monaco", "Courier New");
+
+    static String monoFamily() {
+        var installed = javafx.scene.text.Font.getFamilies();
+        return MONO_CANDIDATES.stream()
+                .filter(installed::contains)
+                .findFirst()
+                .orElse("Monospaced");
+    }
 
     private void onKeyPressed(KeyEvent event) {
         if (!completionPopup.isShowing()) {
@@ -201,6 +251,13 @@ public class GCodeEditorView {
 
     public List<String> currentSuggestions() {
         return List.copyOf(suggestionList.getItems());
+    }
+
+    /** The styled row content of a suggestion display string (code, description). */
+    static String[] splitSuggestion(String display) {
+        int cut = display.indexOf(" — ");
+        return cut < 0 ? new String[] {display, ""} : new String[] {display.substring(0, cut),
+                display.substring(cut + 3)};
     }
 
     // -- documentation popup (hover / Ctrl+Q) ---------------------------------------

@@ -1,24 +1,43 @@
-/* G-code editor coloring (categories from WordClassifier) */
+/* G-code editor coloring (categories from WordClassifier).
+   Syntax colors come from the -gd-syn-* theme-adaptive variables
+   (app.css: light defaults, .dark overrides), so the editor follows the
+   selected theme family. Background, default text, and the line-number
+   gutter are also palette-driven.
+
+   Selector note: the default text rule carries the `.styled-text-area`
+   prefix, so every span rule carries it too AND is declared after it —
+   with equal specificity, source order lets spans win over the default. */
+.styled-text-area {
+    -fx-background-color: -gd-surface;
+}
+.styled-text-area .text {
+    -fx-fill: -gd-text; /* default (unstyled) text follows the theme */
+}
+.styled-text-area .lineno {
+    -fx-background-color: -gd-surface;
+}
 .styled-text-area .paragraph-box:has-caret {
-    -fx-background-color: #eaefff;
+    -fx-background-color: -color-accent-subtle;
 }
-.comment {
-    -fx-fill: #008000;
+
+/* span rules: same specificity as the default, declared after it */
+.styled-text-area .comment {
+    -fx-fill: -gd-syn-comment;
 }
-.g-word {
-    -fx-fill: #0000c0;
+.styled-text-area .g-word {
+    -fx-fill: -gd-syn-g-word;
     -fx-font-weight: bold;
 }
-.m-word {
-    -fx-fill: #c00000;
+.styled-text-area .m-word {
+    -fx-fill: -gd-syn-m-word;
 }
-.axis-param {
-    -fx-fill: #b05000;
+.styled-text-area .axis-param {
+    -fx-fill: -gd-syn-axis;
 }
-.line-number {
-    -fx-fill: #606060;
+.styled-text-area .line-number {
+    -fx-fill: -gd-syn-line-number;
 }
-.fallback {
-    -fx-fill: #909090;
+.styled-text-area .fallback {
+    -fx-fill: -gd-syn-fallback;
     -fx-font-style: italic;
 }

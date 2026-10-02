@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?import javafx.scene.control.ComboBox?>
 <?import javafx.scene.control.Label?>
 <?import javafx.scene.control.Menu?>
 <?import javafx.scene.control.MenuBar?>
@@ -20,6 +19,8 @@
         <MenuItem text="Save" onAction="#onSave" accelerator="Shortcut+S"/>
         <MenuItem text="Save As..." onAction="#onSaveAs" accelerator="Shortcut+Shift+S"/>
         <MenuItem text="Save Preview Image..." onAction="#onSavePreviewImage"/>
+        <SeparatorMenuItem/>
+        <MenuItem text="Settings..." onAction="#onOpenSettings" accelerator="Shortcut+Comma"/>
       </Menu>
     </MenuBar>
   </top>
@@ -27,13 +28,11 @@
     <SplitPane fx:id="splitPane"/>
   </center>
   <bottom>
-    <HBox style="-fx-padding: 4 8 4 8; -fx-spacing: 12">
-      <Label fx:id="posLabel" text="1:1"/>
-      <Label fx:id="statsLabel" text=""/>
+    <HBox styleClass="status-bar">
+      <Label fx:id="posLabel" text="1:1" styleClass="status-text"/>
+      <Label fx:id="statsLabel" text="" styleClass="status-text"/>
       <Region HBox.hgrow="ALWAYS"/>
-      <Label fx:id="warningsLabel" text="" style="-fx-text-fill: #C00000; -fx-font-weight: bold"/>
-      <Label text="Machine:"/>
-      <ComboBox fx:id="profileCombo"/>
+      <Label fx:id="warningsLabel" text="" styleClass="warning-chip"/>
     </HBox>
   </bottom>
 </BorderPane>

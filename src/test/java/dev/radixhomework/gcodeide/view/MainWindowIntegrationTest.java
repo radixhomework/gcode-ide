@@ -92,13 +92,13 @@ class MainWindowIntegrationTest extends ApplicationTest {
     }
 
     @Test
-    void profileSwitchRecomputesWarningsAndBed() throws Exception {
+    void warningsUseTheInternalDefaultProfile() throws Exception {
+        // the Machine dropdown was removed; the internal default profile
+        // still drives out-of-bed checks and the preview bed
         interact(() -> controller.loadText("G1 X350 F600\n"));
         waitUntil(() -> "1 warning(s)".equals(controller.warningsText()));
         assertTrue(controller.warningsTooltip().contains("300"));
-        interact(() -> controller.selectProfile("Wide Mill"));
-        assertEquals("", controller.warningsText());
-        assertEquals(400.0, controller.getPreview().profile().bedX());
+        assertEquals(300.0, controller.getPreview().profile().bedX());
     }
 
     // --- task 7.4: config persistence -----------------------------------------------
@@ -226,6 +226,118 @@ class MainWindowIntegrationTest extends ApplicationTest {
         java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(target.toFile());
         org.junit.jupiter.api.Assertions.assertNotNull(image, "valid image file");
         assertTrue(image.getWidth() > 0 && image.getHeight() > 0);
+    }
+
+    // --- settings dialog ---------------------------------------------------------------
+
+    @Test
+    void settingsApplyCommitsPersistsAndStaysOpen() {
+        interact(() -> controller.applyTheme("Primer Light"));
+        interact(() -> controller.setThemePersister(
+                name -> profileService.updateConfig(c -> c.put("theme", name))));
+        var dialog = new java.util.concurrent.atomic.AtomicReference<SettingsDialog>();
+        interact(() -> {
+            controller.onOpenSettings();
+            dialog.set(controller.lastSettingsDialog());
+        });
+        assertTrue(dialog.get().isShowing());
+
+        // stage without committing: nothing applied, nothing persisted
+        interact(() -> dialog.get().themeComboForTest().getSelectionModel().select("Nord Dark"));
+        assertEquals("Primer Light",
+                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
+        assertEquals(null, profileService.loadConfig().get("theme"));
+
+        // Apply: commits + persists, dialog stays open
+        interact(() -> dialog.get().buttonFor(javafx.scene.control.ButtonType.APPLY).fire());
+        assertEquals("Nord Dark",
+                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
+        assertEquals("Nord Dark", profileService.loadConfig().get("theme"));
+        assertTrue(dialog.get().isShowing(), "Apply keeps the window open");
+    }
+
+    private SettingsDialog dialogWithCloseFlag(java.util.concurrent.atomic.AtomicBoolean closed,
+            java.util.function.Consumer<String> commit) {
+        // closeWindow is overridden: real Stage.hide() hangs in the test JVM
+        // (Platform.startup environment), while the real app closes normally
+        return new SettingsDialog(
+                List.of(new atlantafx.base.theme.PrimerLight(),
+                        new atlantafx.base.theme.PrimerDark(),
+                        new atlantafx.base.theme.Dracula()),
+                "Primer Light", commit) {
+            @Override
+            void closeWindow() {
+                closed.set(true);
+            }
+        };
+    }
+
+    @Test
+    void settingsOkCommitsAndCloses() {
+        interact(() -> controller.applyTheme("Primer Light"));
+        var closed = new java.util.concurrent.atomic.AtomicBoolean();
+        List<String> persisted = new ArrayList<>();
+        var dialog = new java.util.concurrent.atomic.AtomicReference<SettingsDialog>();
+        interact(() -> dialog.set(dialogWithCloseFlag(closed, name -> {
+            controller.applyTheme(name); // real apply path
+            persisted.add(name);
+        })));
+        interact(() -> dialog.get().themeComboForTest().getSelectionModel().select("Dracula"));
+        interact(() -> dialog.get().buttonFor(javafx.scene.control.ButtonType.OK).fire());
+        assertEquals("Dracula",
+                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
+        assertEquals(List.of("Dracula"), persisted);
+        assertTrue(closed.get(), "OK closes the window");
+    }
+
+    @Test
+    void settingsCancelDiscardsUncommittedEdits() {
+        interact(() -> controller.applyTheme("Primer Light"));
+        var closed = new java.util.concurrent.atomic.AtomicBoolean();
+        List<String> persisted = new ArrayList<>();
+        var dialog = new java.util.concurrent.atomic.AtomicReference<SettingsDialog>();
+        interact(() -> dialog.set(dialogWithCloseFlag(closed,
+                name -> persisted.add(name))));
+        interact(() -> dialog.get().themeComboForTest().getSelectionModel().select("Dracula"));
+        interact(() -> dialog.get().buttonFor(javafx.scene.control.ButtonType.CANCEL).fire());
+        // staged edit discarded: previous theme still active, nothing persisted
+        assertEquals("Primer Light",
+                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
+        assertEquals(List.of(), persisted);
+        assertTrue(closed.get(), "Cancel closes the window");
+    }
+
+    @Test
+    void darkFlagTogglesEditorAndPreviewWithTheme() {
+        interact(() -> assertTrue(controller.applyTheme("Primer Dark")));
+        assertTrue(dev.radixhomework.gcodeide.view.UiTheme.isDark(controller.getEditor().node()),
+                "editor carries the dark flag");
+        assertEquals(Preview3DView.PreviewPalette.DARK, controller.getPreview().palette());
+
+        interact(() -> assertTrue(controller.applyTheme("Primer Light")));
+        assertTrue(!dev.radixhomework.gcodeide.view.UiTheme.isDark(controller.getEditor().node()));
+        assertEquals(Preview3DView.PreviewPalette.LIGHT, controller.getPreview().palette());
+    }
+
+    @Test
+    void restorePathAppliesWithoutPersistingAndRejectsUnknown() {
+        interact(() -> assertTrue(controller.applyTheme("Primer Dark")));
+        assertEquals("Primer Dark",
+                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
+        assertEquals(null, profileService.loadConfig().get("theme"));
+        interact(() -> assertTrue(!controller.applyTheme("No Such Theme")));
+        assertEquals("Primer Dark",
+                atlantafx.base.theme.ThemeManager.instance().getTheme().getName());
+    }
+
+    @Test
+    void restartRequiredRowCarriesTheMention() {
+        var row = (javafx.scene.layout.VBox) SettingsDialog.restartRequiredRow(
+                new javafx.scene.control.Label("setting"));
+        assertTrue(row.getChildren().stream()
+                        .anyMatch(child -> child instanceof javafx.scene.control.Label label
+                                && label.getText().equals(SettingsDialog.RESTART_NOTE)),
+                "the restart mention is part of the wrapped row");
     }
 
     // -- helpers -----------------------------------------------------------------
