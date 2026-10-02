@@ -22,6 +22,9 @@
         <SeparatorMenuItem/>
         <MenuItem text="Settings..." onAction="#onOpenSettings" accelerator="Shortcut+Comma"/>
       </Menu>
+      <Menu text="Edit">
+        <MenuItem text="Go to Line..." onAction="#onGoToLine" accelerator="Shortcut+G"/>
+      </Menu>
     </MenuBar>
   </top>
   <center>

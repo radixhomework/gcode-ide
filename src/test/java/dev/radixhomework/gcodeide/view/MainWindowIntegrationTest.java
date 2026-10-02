@@ -163,7 +163,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
         });
         assertEquals(List.of(2), selected);
         interact(() -> org.junit.jupiter.api.Assertions.assertEquals(2,
-                controller.getEditor().node().getCurrentParagraph() + 1));
+                controller.getEditor().codeArea().getCurrentParagraph() + 1));
     }
 
     // --- save preview image ------------------------------------------------------------
@@ -265,6 +265,35 @@ class MainWindowIntegrationTest extends ApplicationTest {
         interact(() -> assertTrue(controller.applyTheme("Primer Light")));
         assertTrue(!dev.radixhomework.gcodeide.view.UiTheme.isDark(controller.getEditor().node()));
         assertEquals(Preview3DView.PreviewPalette.LIGHT, controller.getPreview().palette());
+    }
+
+    // --- go-to-line (Edit > Go to Line..., Ctrl+G) ---------------------------------------
+
+    @Test
+    void goToLineNavigatesAndIgnoresInvalid() throws Exception {
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < 100; i++) {
+            text.append("G1 X").append(i).append('\n');
+        }
+        interact(() -> controller.loadText(text.toString()));
+
+        interact(() -> controller.goToLine("42"));
+        assertEquals(42, controller.getEditor().codeArea().getCurrentParagraph() + 1);
+
+        interact(() -> controller.goToLine("abc"));
+        interact(() -> controller.goToLine("999"));
+        assertEquals(42, controller.getEditor().codeArea().getCurrentParagraph() + 1,
+                "invalid input leaves the caret unchanged");
+    }
+
+    @Test
+    void fxmlWiresEditGoToLineWithShortcut() throws Exception {
+        String fxml = new String(getClass()
+                .getResourceAsStream("/view/MainWindow.fxml").readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(fxml.contains("Go to Line..."), "menu item present");
+        assertTrue(fxml.contains("Shortcut+G"), "Ctrl+G accelerator present");
+        assertTrue(fxml.contains("text=\"Edit\""), "Edit menu present");
     }
 
     @Test

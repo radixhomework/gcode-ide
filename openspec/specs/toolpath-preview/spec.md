@@ -22,13 +22,6 @@ Toolpath segments SHALL render as thin lines centered on the toolpath (the line 
 - **WHEN** previewing a program with cuts at two depths
 - **THEN** the toolpath appears as thin lines along the tool path, with the depth ramp still distinguishing passes
 
-### Requirement: Machine bed context in 3D
-The preview SHALL render the active machine profile's bed as the ground reference the toolpath is drawn against, and SHALL resize it when the active profile changes.
-
-#### Scenario: Bed follows the profile
-- **WHEN** the active machine profile changes from one bed size to another
-- **THEN** the rendered bed reflects the new envelope
-
 ### Requirement: Live update while editing
 The preview SHALL refresh automatically (deferred briefly while typing) whenever the document text changes, without requiring an explicit refresh action; if the new text cannot be parsed, the last good toolpath SHALL remain visible with a visible indication that it is stale.
 
@@ -71,25 +64,19 @@ The 3D preview SHALL support the following camera controls: the mouse wheel zoom
 - **THEN** each motion applies on top of the previous view state (pan persists across orbit and zoom)
 
 ### Requirement: Toolpath statistics
-The application SHALL display, for the current toolpath: the cutting bounding box in mm, total cut distance, total rapid distance, and an estimated run time computed from commanded feeds with rapid moves at the profile's rapid rate.
+The application SHALL display, for the current toolpath: the cutting bounding box in mm, total cut distance, total rapid distance, and an estimated cutting time computed from commanded feed rates over cut moves only. The figure SHALL be labeled as an estimate. Cut moves without a commanded feed SHALL be flagged as a dialect warning and SHALL NOT contribute to the estimated time.
 
 #### Scenario: Known program statistics
 - **WHEN** previewing a program whose moves and feeds are known
-- **THEN** the displayed bounding box and estimated time match values computed from those moves and feeds
+- **THEN** the displayed bounding box, distances, and estimated cutting time match values computed from those cut moves and feeds
 
-### Requirement: Out-of-bed warning
-Moves that fall outside the active machine profile's bed envelope SHALL be flagged as warnings listing the offending source lines, and SHALL be visually marked in the preview.
+#### Scenario: Rapid moves are not timed
+- **WHEN** a program contains rapid moves
+- **THEN** the rapid distance is displayed but rapids add nothing to the estimated time
 
-#### Scenario: Move beyond the bed
-- **WHEN** a document commands a move to X 350 on a 300 mm bed
-- **THEN** a warning identifies the offending line(s), and the out-of-bed portion is visually marked in the preview
-
-### Requirement: Excessive feed warning
-Cut moves commanded at a feed rate exceeding the active profile's maximum cutting feed SHALL be flagged as warnings citing the source lines and the applicable limit.
-
-#### Scenario: Feed above the profile cap
-- **WHEN** a cut move is commanded at F 2000 while the profile caps cutting feed at 800 mm/min
-- **THEN** a warning cites the move's line and the 800 mm/min limit
+#### Scenario: Feedless cuts are warned and untimed
+- **WHEN** a cut move has no commanded feed
+- **THEN** a warning cites its source line and the move adds nothing to the estimated time
 
 ### Requirement: Save preview as image
 The application SHALL provide an action that saves the currently rendered preview as an image file in PNG or JPG format, chosen through a file dialog that starts in the last used directory. The saved image SHALL contain the preview as currently visible (rotation, toolpath, bed).

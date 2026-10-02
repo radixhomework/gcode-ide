@@ -139,7 +139,7 @@ public class MainWindowController {
         editor.addCurrentLineListener(preview::setCurrentLine);
         preview.addLineSelectedListener(editor::gotoLine);
 
-        editor.node().textProperty().addListener((obs, o, n) -> {
+        editor.codeArea().textProperty().addListener((obs, o, n) -> {
             if (!loadingText) {
                 documentService.markModified();
                 debounce.playFromStart();
@@ -291,6 +291,29 @@ public class MainWindowController {
                 .ifPresent(t -> javafx.application.Application
                         .setUserAgentStylesheet(t.getUserAgentStylesheet()));
         themePersister.accept(name);
+    }
+
+    /** Opens the go-to-line input dialog (Edit > Go to Line..., Ctrl+G). */
+    @FXML
+    public void onGoToLine() {
+        var dialog = new javafx.scene.control.TextInputDialog("1");
+        dialog.setTitle("Go to line");
+        dialog.setHeaderText("Go to line");
+        dialog.setContentText("Line number:");
+        dialog.showAndWait().ifPresent(this::goToLine);
+    }
+
+    /** Parses the go-to-line input and navigates; invalid input is ignored
+     *  without moving the caret (gotoLine range-checks out-of-document lines). */
+    public void goToLine(String input) {
+        try {
+            int line = Integer.parseInt(input == null ? "" : input.trim());
+            if (line >= 1) {
+                editor.gotoLine(line);
+            }
+        } catch (NumberFormatException ignored) {
+            // empty or non-numeric input: caret unchanged
+        }
     }
 
     /** Opens the dedicated settings window (File > Settings...). */

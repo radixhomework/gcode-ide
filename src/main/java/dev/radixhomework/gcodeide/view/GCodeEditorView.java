@@ -12,6 +12,7 @@ import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseEvent;
 import javafx.stage.Popup;
+import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
 
@@ -25,6 +26,8 @@ import org.fxmisc.richtext.LineNumberFactory;
 public class GCodeEditorView {
 
     private final CodeArea codeArea = new CodeArea();
+    private final VirtualizedScrollPane<CodeArea> scrollPane =
+            new VirtualizedScrollPane<>(codeArea);
     private final List<BiConsumer<Integer, Integer>> caretListeners = new ArrayList<>();
     private final List<IntConsumer> currentLineListeners = new ArrayList<>();
     private final Popup completionPopup = new Popup();
@@ -47,9 +50,13 @@ public class GCodeEditorView {
         codeArea.setStyle("-fx-font-family: '" + monoFamily() + "'; -fx-font-size: 13px;");
         // let the SplitPane shrink the editor freely
         codeArea.setMinWidth(0);
+        // token lookup root: with the scroll wrapper the codeArea is no longer
+        // the scene root, so .root would not match it
+        scrollPane.getStyleClass().add("tokens");
         codeArea.plainTextChanges().subscribe(change -> {
             restyleAffected(change.getPosition(), change.getInsertionEnd());
             updateCompletionPopup();
+            hideDocumentation(); // text changed: any open documentation is stale
         });
         codeArea.caretPositionProperty().addListener((obs, oldPos, newPos) -> fireCaretMoved());
 
@@ -90,9 +97,6 @@ public class GCodeEditorView {
         });
         completionPopup.getContent().add(suggestionList);
         completionPopup.setAutoHide(true);
-        codeArea.addEventFilter(KeyEvent.KEY_PRESSED, this::onKeyPressed);
-
-        codeArea.addEventFilter(KeyEvent.KEY_PRESSED, this::onKeyPressed);
 
         docLabel.getStyleClass().add("doc-popup");
         var docPane = new StackPane(docLabel);
@@ -102,21 +106,40 @@ public class GCodeEditorView {
         docPopup.setAutoHide(true);
         hoverTimer.setOnFinished(event -> showDocumentationForHover(hoverX, hoverY));
         codeArea.addEventFilter(MouseEvent.MOUSE_MOVED, event -> {
-            hideDocumentation();
+            if (docPopup.isShowing()) {
+                // sticky: movement within the triggering keyword keeps it open
+                if (!cursorOnAnchorWord(event.getX(), event.getY())) {
+                    hideDocumentation();
+                    hoverX = event.getX();
+                    hoverY = event.getY();
+                    hoverTimer.playFromStart();
+                }
+                return;
+            }
             hoverX = event.getX();
             hoverY = event.getY();
             hoverTimer.playFromStart();
         });
+        // single key-press filter: popup keys, Ctrl+Q docs, doc-popup dismissal
         codeArea.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
             if (event.isControlDown() && event.getCode() == KeyCode.Q) {
                 showDocumentationForCaret();
                 event.consume();
+                return;
             }
+            hideDocumentation(); // any key press hides the documentation popup
+            onKeyPressed(event);
         });
+
+        codeArea.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> hideDocumentation());
     }
 
     private double hoverX;
     private double hoverY;
+    // anchor of the word the documentation popup is showing for (sticky popup)
+    private int anchorParagraph = -1;
+    private int anchorStart = -1;
+    private int anchorEnd = -1;
 
     /** Monospace candidates in preference order (design D3). */
     static final List<String> MONO_CANDIDATES =
@@ -138,19 +161,25 @@ public class GCodeEditorView {
         if (code == KeyCode.ESCAPE) {
             completionPopup.hide();
             event.consume();
-        } else if (code == KeyCode.ENTER) {
+        } else if (code == KeyCode.ENTER || code == KeyCode.TAB) {
             String chosen = suggestionList.getSelectionModel().getSelectedItem();
             if (chosen != null) {
                 acceptSuggestion(chosen);
             }
-            event.consume();
+            event.consume(); // Tab must not insert a tab character while the popup is open
         } else if (code == KeyCode.DOWN || code == KeyCode.UP) {
             suggestionList.requestFocus(); // let the list handle the navigation
         }
     }
 
-    /** The JavaFX node to place in a layout. */
-    public CodeArea node() {
+    /** The JavaFX node to place in a layout (scroll bars included). */
+    public javafx.scene.layout.Region node() {
+        return scrollPane;
+    }
+
+
+    /** The code area itself (tests, text wiring). */
+    public CodeArea codeArea() {
         return codeArea;
     }
 
@@ -262,8 +291,9 @@ public class GCodeEditorView {
 
     // -- documentation popup (hover / Ctrl+Q) ---------------------------------------
 
-    /** The word (letter(s) plus trailing digits) at position {@code column}, or "". */
-    static String wordAt(String paragraph, int column) {
+    /** The [start, end) range of the word (letter(s) plus trailing digits)
+     *  at position {@code column}, or null. */
+    static int[] wordRangeAt(String paragraph, int column) {
         int n = paragraph == null ? 0 : paragraph.length();
         for (int idx : new int[] {column, column - 1}) {
             int i = idx;
@@ -279,31 +309,38 @@ public class GCodeEditorView {
                 while (end < n && Character.isLetterOrDigit(paragraph.charAt(end))) {
                     end++;
                 }
-                return paragraph.substring(start, end);
+                return new int[] {start, end};
             }
         }
-        return "";
+        return null;
     }
 
-    /** The word at the caret, or the nearest word left then right in the paragraph. */
-    String wordAtOrNearCaret() {
-        String paragraph = codeArea.getParagraph(codeArea.getCurrentParagraph()).getText();
+    /** The word at position {@code column}, or "". */
+    static String wordAt(String paragraph, int column) {
+        int[] range = wordRangeAt(paragraph, column);
+        return range == null ? "" : paragraph.substring(range[0], range[1]);
+    }
+
+    /** {paragraph, start, end} of the word at (or nearest) the caret, or null. */
+    private int[] wordRangeNearCaret() {
+        int paragraph = codeArea.getCurrentParagraph();
+        String paragraphText = codeArea.getParagraph(paragraph).getText();
         int column = codeArea.getCaretColumn();
-        String word = wordAt(paragraph, column);
-        if (!word.isEmpty()) {
-            return word;
+        int[] range = wordRangeAt(paragraphText, column);
+        if (range != null) {
+            return new int[] {paragraph, range[0], range[1]};
         }
-        for (int d = 1; d <= paragraph.length(); d++) {
-            word = wordAt(paragraph, column - d);
-            if (!word.isEmpty()) {
-                return word;
+        for (int d = 1; d <= paragraphText.length(); d++) {
+            range = wordRangeAt(paragraphText, column - d);
+            if (range != null) {
+                return new int[] {paragraph, range[0], range[1]};
             }
-            word = wordAt(paragraph, column + d);
-            if (!word.isEmpty()) {
-                return word;
+            range = wordRangeAt(paragraphText, column + d);
+            if (range != null) {
+                return new int[] {paragraph, range[0], range[1]};
             }
         }
-        return "";
+        return null;
     }
 
     /** The documentation line for a word, or null when unknown. Trailing
@@ -332,11 +369,16 @@ public class GCodeEditorView {
         }
         var position = codeArea.offsetToPosition(hit.getCharacterIndex().getAsInt(),
                 org.fxmisc.richtext.model.TwoDimensional.Bias.Backward);
-        String doc = documentationFor(
-                wordAt(codeArea.getParagraph(position.getMajor()).getText(), position.getMinor()));
+        String paragraphText = codeArea.getParagraph(position.getMajor()).getText();
+        int[] range = wordRangeAt(paragraphText, position.getMinor());
+        String doc = range == null ? null
+                : documentationFor(paragraphText.substring(range[0], range[1]));
         if (doc == null) {
             return;
         }
+        anchorParagraph = position.getMajor();
+        anchorStart = range[0];
+        anchorEnd = range[1];
         docLabel.setText(doc);
         var screen = codeArea.localToScreen(x, y + 16); // popup.show takes screen coords
         if (screen != null) {
@@ -345,10 +387,15 @@ public class GCodeEditorView {
     }
 
     void showDocumentationForCaret() {
-        String doc = documentationFor(wordAtOrNearCaret());
+        int[] anchor = wordRangeNearCaret();
+        String doc = anchor == null ? null : documentationFor(
+                codeArea.getParagraph(anchor[0]).getText().substring(anchor[1], anchor[2]));
         if (doc == null) {
             return;
         }
+        anchorParagraph = anchor[0];
+        anchorStart = anchor[1];
+        anchorEnd = anchor[2];
         var bounds = codeArea.getCaretBounds();
         docLabel.setText(doc);
         if (bounds.isPresent()) {
@@ -356,6 +403,22 @@ public class GCodeEditorView {
         } else {
             docPopup.show(codeArea, 10, 10);
         }
+    }
+
+    /** True when the cursor is still on the word the popup is anchored to. */
+    private boolean cursorOnAnchorWord(double x, double y) {
+        var hit = codeArea.hit(x, y);
+        if (hit.getCharacterIndex().isEmpty()) {
+            return false;
+        }
+        var position = codeArea.offsetToPosition(hit.getCharacterIndex().getAsInt(),
+                org.fxmisc.richtext.model.TwoDimensional.Bias.Backward);
+        if (position.getMajor() != anchorParagraph) {
+            return false;
+        }
+        int[] range = wordRangeAt(
+                codeArea.getParagraph(position.getMajor()).getText(), position.getMinor());
+        return range != null && range[0] == anchorStart && range[1] == anchorEnd;
     }
 
     void hideDocumentation() {
