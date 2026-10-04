@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import javafx.application.Application;
+import javafx.scene.image.Image;
 import javafx.scene.Scene;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -79,6 +80,7 @@ public class App extends Application {
         });
         controller.getDocumentService().setPrompt(MainWindowController.alertPrompt());
 
+        stage.getIcons().add(appIcon());
         stage.titleProperty().bind(controller.titleProperty());
         // persisted theme first (must precede scene creation); AtlantaFX
         // Primer Light is the default when nothing valid was ever selected.
@@ -111,6 +113,12 @@ public class App extends Application {
             saveGeometry(stage, configService);
         });
         stage.show();
+    }
+
+    /** The application icon, scaled down from the packaged 1254x1254 logo. */
+    public static Image appIcon() {
+        return new Image(App.class.getResourceAsStream("/assets/logo.png"),
+                64, 64, true, true);
     }
 
     private FileChooser newFileChooser(String title, String filterName, String... extensions) {

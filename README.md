@@ -93,8 +93,12 @@ curl -sL -o target/openjfx-jmods.zip \
 unzip -o target/openjfx-jmods.zip -d target/
 jpackage --type app-image --name gcode-ide \
   --input target/package --main-jar gcode-ide-<version>.jar \
+  --icon src/main/resources/assets/logo.ico \
   --module-path target/javafx-jmods-25 \
   --add-modules javafx.controls,javafx.fxml,java.logging \
   --java-options "--enable-native-access=javafx.graphics" --dest dist-java
 dist-java/gcode-ide/gcode-ide.exe            # or --version to verify
 ```
+
+`assets/logo.ico` is the 256x256 icon conversion of `assets/logo.png` used
+for the executable; the window icon is loaded from the PNG at runtime.

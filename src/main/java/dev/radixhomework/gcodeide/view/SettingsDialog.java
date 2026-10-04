@@ -48,6 +48,7 @@ public class SettingsDialog {
     public SettingsDialog(List<atlantafx.base.theme.Theme> themes, String committedTheme,
             Consumer<String> themeCommit) {
         stage.setTitle("Settings");
+        stage.getIcons().add(dev.radixhomework.gcodeide.App.appIcon());
         stage.setResizable(true);
 
         themeCombo.getItems().addAll(themes.stream()
