@@ -4,3 +4,4 @@ dependency-reduced-pom.xml
 .idea/
 *.iml
 .vscode/
+.zcode/
