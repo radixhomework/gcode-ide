@@ -77,6 +77,14 @@ public class App extends Application {
                         rememberLastDir(path, configService);
                         return path;
                     });
+        }, suggested -> {
+            FileChooser dialog = newFileChooser("Import image",
+                    "Image files (*.svg)", "*.svg");
+            return Optional.ofNullable(dialog.showOpenDialog(stage)).map(File::toPath)
+                    .map(path -> {
+                        rememberLastDir(path, configService);
+                        return path;
+                    });
         });
         controller.getDocumentService().setPrompt(MainWindowController.alertPrompt());
 

@@ -15,6 +15,7 @@
       <Menu text="File">
         <MenuItem text="New" onAction="#onNew" accelerator="Shortcut+N"/>
         <MenuItem text="Open..." onAction="#onOpen" accelerator="Shortcut+O"/>
+        <MenuItem text="Import Image..." onAction="#onImportImage"/>
         <SeparatorMenuItem/>
         <MenuItem text="Save" onAction="#onSave" accelerator="Shortcut+S"/>
         <MenuItem text="Save As..." onAction="#onSaveAs" accelerator="Shortcut+Shift+S"/>

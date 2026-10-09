@@ -36,7 +36,8 @@ class MainWindowIntegrationTest extends ApplicationTest {
         controller = MainWindowController.create(
                 title -> Optional.empty(),
                 suggested -> Optional.of(saveTarget),
-                suggested -> Optional.ofNullable(previewImageTarget.get()));
+                suggested -> Optional.ofNullable(previewImageTarget.get()),
+                title -> Optional.of(dir.resolve("import.svg")));
         // keep the cancel-only default prompt: no real modal can ever block a test
         stage.setScene(new javafx.scene.Scene(controller.root(), 900, 600));
         stage.show();
@@ -333,6 +334,48 @@ class MainWindowIntegrationTest extends ApplicationTest {
         waitUntil(() -> controller.getPreview().highlightCount() > 1);
     }
 
+    // --- SVG import wizard ---------------------------------------------------------------
+
+    @Test
+    void importWizardGeneratesAndLoadsAsNewDocument() throws Exception {
+        var fixture = dir.resolve("fixture.svg");
+        Files.writeString(fixture, fixtureSvg());
+        interact(() -> controller.openImportWizard(fixture));
+        waitUntil(() -> controller.lastImportWizard() != null
+                && controller.lastImportWizard().isShowing());
+
+        // adjust width to 50mm and Generate
+        interact(() -> controller.lastImportWizard().widthFieldForTest().setText("50"));
+        interact(() -> controller.lastImportWizard().generateButtonForTest().fire());
+
+        assertFalse(controller.lastImportWizard().isShowing(), "wizard closed on Generate");
+        String gcode = controller.getEditor().getText();
+        assertTrue(gcode.startsWith("G21 G90 G17"), "generated program loaded");
+        assertTrue(controller.titleProperty().get().contains("untitled"),
+                "loaded as a new untitled document");
+    }
+
+    @Test
+    void importWizardCancelImportsNothing() throws Exception {
+        var fixture = dir.resolve("fixture.svg");
+        Files.writeString(fixture, fixtureSvg());
+        interact(() -> controller.openImportWizard(fixture));
+        waitUntil(() -> controller.lastImportWizard() != null
+                && controller.lastImportWizard().isShowing());
+        interact(() -> controller.lastImportWizard().cancelButtonForTest().fire());
+        assertFalse(controller.lastImportWizard().isShowing());
+        assertEquals("", controller.getEditor().getText(), "nothing imported on Cancel");
+    }
+
+    @Test
+    void importMenuPresentInFxml() throws Exception {
+        String fxml = new String(getClass()
+                .getResourceAsStream("/view/MainWindow.fxml").readAllBytes(),
+                java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(fxml.contains("Import Image..."), "menu item present");
+        assertTrue(fxml.contains("#onImportImage"), "wired to the handler");
+    }
+
     // -- helpers -----------------------------------------------------------------
 
     private SettingsDialog dialogWithCloseFlag(java.util.concurrent.atomic.AtomicBoolean closed,
@@ -349,6 +392,12 @@ class MainWindowIntegrationTest extends ApplicationTest {
                 closed.set(true);
             }
         };
+    }
+
+    private static String fixtureSvg() throws IOException {
+        try (var in = MainWindowIntegrationTest.class.getResourceAsStream("/svg/fixture.svg")) {
+            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
     }
 
     private static javafx.scene.input.MouseEvent pickPress(javafx.scene.input.PickResult pick) {

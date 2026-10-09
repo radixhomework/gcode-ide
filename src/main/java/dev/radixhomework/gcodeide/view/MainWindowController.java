@@ -71,26 +71,42 @@ public class MainWindowController {
             new javafx.beans.property.SimpleStringProperty("G-Code IDE");
     private final Function<String, Optional<Path>> openChooser;
     private final DocumentService.PathChooser previewImageChooser;
+    private final DocumentService.PathChooser importChooser;
     private boolean loadingText;
+    @Getter
+    private ImportWizard lastImportWizard;
+
+    /** The most recently opened import wizard (tests). */
+    public ImportWizard lastImportWizard() {
+        return lastImportWizard;
+    }
     @Getter
     private javafx.scene.Parent rootNode;
 
     /** Loads the FXML with this controller; used by App and by GUI tests. */
     public static MainWindowController create(
             Function<String, Optional<Path>> openChooser, PathChooser saveAsChooser) {
-        return create(openChooser, saveAsChooser, suggested -> Optional.empty());
+        return create(openChooser, saveAsChooser, suggested -> Optional.empty(),
+                suggested -> Optional.empty());
     }
 
     public static MainWindowController create(
             Function<String, Optional<Path>> openChooser, PathChooser saveAsChooser,
             PathChooser previewImageChooser) {
+        return create(openChooser, saveAsChooser, previewImageChooser,
+                suggested -> Optional.empty());
+    }
+
+    public static MainWindowController create(
+            Function<String, Optional<Path>> openChooser, PathChooser saveAsChooser,
+            PathChooser previewImageChooser, PathChooser importChooser) {
         try {
             URL fxml = MainWindowController.class.getResource("/view/MainWindow.fxml");
             FXMLLoader loader = new FXMLLoader(fxml);
             MainWindowController controller = new MainWindowController(
                     openChooser,
                     new DocumentService(displayName -> SaveDecision.CANCEL, saveAsChooser),
-                    previewImageChooser);
+                    previewImageChooser, importChooser);
             loader.setController(controller);
             controller.rootNode = loader.load();
             return controller;
@@ -119,15 +135,17 @@ public class MainWindowController {
 
     public MainWindowController(
             Function<String, Optional<Path>> openChooser, DocumentService documentService) {
-        this(openChooser, documentService, suggested -> Optional.empty());
+        this(openChooser, documentService, suggested -> Optional.empty(),
+                suggested -> Optional.empty());
     }
 
     public MainWindowController(
             Function<String, Optional<Path>> openChooser, DocumentService documentService,
-            PathChooser previewImageChooser) {
+            PathChooser previewImageChooser, PathChooser importChooser) {
         this.openChooser = openChooser;
         this.documentService = documentService;
         this.previewImageChooser = previewImageChooser;
+        this.importChooser = importChooser;
     }
 
     @FXML
@@ -291,6 +309,41 @@ public class MainWindowController {
                 .ifPresent(t -> javafx.application.Application
                         .setUserAgentStylesheet(t.getUserAgentStylesheet()));
         themePersister.accept(name);
+    }
+
+    /** Opens the SVG import wizard for a chosen image file (File > Import Image...). */
+    @FXML
+    public void onImportImage() {
+        importChooser.choose("Import image").ifPresent(this::openImportWizard);
+    }
+
+    /** Loads the SVG and opens the wizard; on Generate, imports as a new document. */
+    public void openImportWizard(Path svgFile) {
+        dev.radixhomework.gcodeide.model.svg.SvgDocument doc;
+        try {
+            doc = dev.radixhomework.gcodeide.model.svg.SvgDocument.load(
+                    java.nio.file.Files.readString(svgFile));
+        } catch (IOException | RuntimeException e) {
+            var alert = new Alert(Alert.AlertType.WARNING,
+                    "Could not import " + svgFile.getFileName() + ":\n" + e.getMessage(),
+                    ButtonType.OK);
+            alert.setHeaderText("Import failed");
+            alert.showAndWait();
+            return;
+        }
+        if (doc.isEmpty()) {
+            var alert = new Alert(Alert.AlertType.WARNING,
+                    "No importable stroked geometry found in the drawing.", ButtonType.OK);
+            alert.setHeaderText("Import failed");
+            alert.showAndWait();
+            return;
+        }
+        lastImportWizard = new ImportWizard(doc, gcode -> {
+            if (documentService.newDocument(editor::getText)) {
+                loadText(gcode);
+            }
+        });
+        lastImportWizard.show();
     }
 
     /** Opens the go-to-line input dialog (Edit > Go to Line..., Ctrl+G). */

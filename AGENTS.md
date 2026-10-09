@@ -9,8 +9,13 @@ sections that did not apply were removed.)
 
 ## Commit policy
 
-- **Never commit or push unless the user explicitly asked for it.**
-  Finishing a task or passing tests is never consent to commit.
+- **Commit and push only on the user's explicit demand.** Finishing a
+  task or passing tests is never consent to commit.
+- **Sole exception - quality-check rounds**: when the user asks for a
+  quality check, or when the fix/verify loop below is running, the agent
+  is autonomous: it commits and pushes its fixes on `feat/java-design`
+  itself so each iteration starts from a clean, recorded state, without
+  asking each time.
 - If the user asks to hold for local testing, report "done, ready to test"
   and stop — don't ask again; wait for an explicit go.
 - Descriptive imperative commit subjects, English, body bullets explaining
@@ -44,6 +49,12 @@ Fix what fails, re-run `mvn test`, repeat until green.
 
 **Stop rule: 3 iterations maximum, autonomously.** After 3 fix/verify
 iterations, stop and report what was tried; wait for the user's decision.
+
+**During these fix/verify rounds the agent is autonomous**: it commits and
+pushes each fix itself (this is the only case where committing without an
+explicit user demand is allowed - see Commit policy), within the
+quality-check scope only. It does not use that autonomy to commit anything
+unrelated to the findings.
 
 ## Testing stance
 
