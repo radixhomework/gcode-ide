@@ -1,19 +1,23 @@
 package dev.radixhomework.gcodeide.model.svg;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Element;
-import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 /**
  * Loads an SVG document into stroked geometry runs (user units) plus
  * warnings for unsupported constructs. Supported: path, rect, circle,
  * ellipse, line, polyline, polygon; transforms translate/scale/rotate/
- * matrix. Everything else is skipped with a warning. Pure Java (JDK DOM).
+ * matrix; presentation via attributes and CSS tag/class selectors from
+ * &lt;style&gt; blocks. Shape geometry imports regardless of paint
+ * (stroked, filled, or unpainted - the outline is the toolpath). Everything
+ * else is skipped with a warning. Pure Java (JDK DOM).
  */
 final class SvgDocumentLoader {
 
@@ -21,41 +25,127 @@ final class SvgDocumentLoader {
             Set.of("svg", "g", "path", "rect", "circle", "ellipse", "line",
                     "polyline", "polygon");
 
+    private static final Set<String> TRANSPARENT_TAGS =
+            Set.of("svg", "g", "defs", "title", "desc", "metadata", "style");
+
     private final List<SvgRun> runs = new ArrayList<>();
     private final Set<String> warnings = new LinkedHashSet<>();
+    /** CSS selector -> declarations (later rules win). Keyed ".class", "tag", "#id". */
+    private final Map<String, Map<String, String>> cssRules = new LinkedHashMap<>();
 
     private SvgDocumentLoader() {
     }
 
     static SvgDocument load(String svgText) {
+        var factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(false);
+        SvgDocumentLoader loader = new SvgDocumentLoader();
+        Element root;
         try {
-            var factory = DocumentBuilderFactory.newInstance();
-            factory.setNamespaceAware(false);
             var dom = factory.newDocumentBuilder()
                     .parse(new org.xml.sax.InputSource(
                             new java.io.StringReader(svgText)));
-            SvgDocumentLoader loader = new SvgDocumentLoader();
-            loader.walk(dom.getDocumentElement(), Mat.IDENTITY, null);
-            double[] size = loader.readSize(dom.getDocumentElement());
-            return new SvgDocument(loader.runs, new ArrayList<>(loader.warnings), size[0], size[1]);
+            root = dom.getDocumentElement();
         } catch (Exception e) {
             throw new IllegalArgumentException("unparseable SVG: " + e.getMessage(), e);
         }
+        loader.collectStyleRules(root);
+        loader.walk(root, Mat.IDENTITY);
+        double[] size = loader.readSize(root);
+        if (loader.runs.isEmpty()) {
+            loader.warnings.add("no shape geometry found - the drawing has no "
+                    + "importable elements (only text/images/etc, or it is empty)");
+        }
+        return new SvgDocument(loader.runs, new ArrayList<>(loader.warnings),
+                size[0], size[1]);
+    }
+
+    // -- CSS: <style> blocks -> selector rules ----------------------------------
+
+    private void collectStyleRules(Element el) {
+        if (localName(el).equals("style")) {
+            parseRules(el.getTextContent());
+        }
+        NodeList children = el.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            if (children.item(i) instanceof Element child) {
+                collectStyleRules(child);
+            }
+        }
+    }
+
+    private void parseRules(String css) {
+        if (css == null || css.isBlank()) {
+            return;
+        }
+        for (String block : css.split("}")) {
+            int brace = block.indexOf('{');
+            if (brace < 0) {
+                continue;
+            }
+            String selectors = block.substring(0, brace).trim();
+            if (selectors.startsWith("@")) {
+                continue; // @media and other at-rules: not supported
+            }
+            Map<String, String> decls = parseDecls(block.substring(brace + 1));
+            for (String sel : selectors.split(",")) {
+                String key = sel.trim().replaceAll("(:.*)$", "").trim();
+                if (!key.isEmpty()) {
+                    cssRules.computeIfAbsent(key, k -> new LinkedHashMap<>())
+                            .putAll(decls);
+                }
+            }
+        }
+    }
+
+    private static Map<String, String> parseDecls(String decls) {
+        Map<String, String> out = new LinkedHashMap<>();
+        for (String decl : decls.split(";")) {
+            String[] kv = decl.split(":", 2);
+            if (kv.length == 2) {
+                out.put(kv[0].trim(), kv[1].trim());
+            }
+        }
+        return out;
+    }
+
+    /** Effective declarations for an element: tag rule, then class rules,
+     *  then id rule, then inline style (later wins). */
+    private Map<String, String> declsFor(Element el) {
+        Map<String, String> m = new LinkedHashMap<>();
+        String tag = localName(el);
+        Map<String, String> tagRule = cssRules.get(tag);
+        if (tagRule != null) {
+            m.putAll(tagRule);
+        }
+        for (String c : el.getAttribute("class").split("\\s+")) {
+            Map<String, String> rule = cssRules.get("." + c);
+            if (rule != null) {
+                m.putAll(rule);
+            }
+        }
+        if (el.hasAttribute("id")) {
+            Map<String, String> rule = cssRules.get("#" + el.getAttribute("id"));
+            if (rule != null) {
+                m.putAll(rule);
+            }
+        }
+        m.putAll(parseDecls(el.getAttribute("style")));
+        return m;
+    }
+
+    private static String localName(Element el) {
+        String tag = el.getTagName();
+        int colon = tag.indexOf(':');
+        return colon >= 0 ? tag.substring(colon + 1) : tag;
     }
 
     // -- tree walk ------------------------------------------------------------------
 
-    private void walk(Element el, Mat ctm, String inheritedStroke) {
-        String tag = el.getTagName();
-        int colon = tag.indexOf(':');
-        if (colon >= 0) {
-            tag = tag.substring(colon + 1);
-        }
-        String stroke = el.hasAttribute("stroke") ? el.getAttribute("stroke")
-                : inheritedStroke;
+    private void walk(Element el, Mat ctm) {
+        String tag = localName(el);
         if (!SUPPORTED.contains(tag)) {
-            if (!tag.equals("svg") && !tag.equals("defs") && !tag.equals("title")
-                    && !tag.equals("desc") && !tag.equals("metadata")) {
+            if (!TRANSPARENT_TAGS.contains(tag)) {
                 warnings.add("unsupported element '" + tag + "' skipped");
             }
             return;
@@ -69,36 +159,37 @@ final class SvgDocumentLoader {
             }
         }
         switch (tag) {
-            case "svg", "g" -> walkChildren(el, local, stroke);
-            case "path" -> addPath(el, local, stroke);
-            case "rect" -> addShape(el, local, stroke, rectCmds(el));
-            case "circle" -> addShape(el, local, stroke, circleCmds(el));
-            case "ellipse" -> addShape(el, local, stroke, ellipseCmds(el));
-            case "line" -> addShape(el, local, stroke, lineCmds(el));
-            case "polyline" -> addShape(el, local, stroke, pointsCmds(el, false));
-            case "polygon" -> addShape(el, local, stroke, pointsCmds(el, true));
+            case "svg", "g" -> walkChildren(el, local);
+            case "path" -> addPath(el, local);
+            case "rect" -> addShape(el, local, rectCmds(el));
+            case "circle" -> addShape(el, local, circleCmds(el));
+            case "ellipse" -> addShape(el, local, ellipseCmds(el));
+            case "line" -> addShape(el, local, lineCmds(el));
+            case "polyline" -> addShape(el, local, pointsCmds(el, false));
+            case "polygon" -> addShape(el, local, pointsCmds(el, true));
             default -> warnings.add("unsupported element '" + tag + "' skipped");
         }
     }
 
-    private void walkChildren(Element el, Mat ctm, String stroke) {
+    private void walkChildren(Element el, Mat ctm) {
         NodeList children = el.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
             if (children.item(i) instanceof Element child) {
-                walk(child, ctm, stroke);
+                walk(child, ctm);
             }
         }
     }
 
-    private void addPath(Element el, Mat ctm, String stroke) {
-        if (!stroked(el, stroke)) {
-            return;
-        }
+    // -- geometry collection ---------------------------------------------------------
+
+    private void addPath(Element el, Mat ctm) {
+        // geometry imports regardless of paint: the outline of a filled or
+        // unpainted shape is exactly what a CNC toolpath needs
         addCmds(el.getAttribute("d"), ctm);
     }
 
-    private void addShape(Element el, Mat ctm, String stroke, List<SvgPathData.Cmd> cmds) {
-        if (!stroked(el, stroke) || cmds == null) {
+    private void addShape(Element el, Mat ctm, List<SvgPathData.Cmd> cmds) {
+        if (cmds == null) {
             return;
         }
         addCmdsList(cmds, ctm);
@@ -123,25 +214,6 @@ final class SvgDocumentLoader {
             }
         }
     }
-
-    private static boolean stroked(Element el, String inheritedStroke) {
-        String stroke = el.hasAttribute("stroke") ? el.getAttribute("stroke")
-                : inheritedStroke;
-        if (stroke != null && !stroke.isBlank() && !stroke.equals("none")) {
-            return true;
-        }
-        String style = el.getAttribute("style");
-        for (String decl : style.split(";")) {
-            String[] kv = decl.split(":", 2);
-            if (kv.length == 2 && kv[0].trim().equals("stroke")
-                    && !kv[1].trim().equals("none")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // -- shape -> path commands -------------------------------------------------------
 
     private static List<SvgPathData.Cmd> rectCmds(Element el) {
         double x = num(el.getAttribute("x")), y = num(el.getAttribute("y"));

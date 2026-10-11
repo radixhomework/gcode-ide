@@ -1,6 +1,6 @@
 ## Purpose
 
-Defines the drawing import flow: the Import Image entry, the wizard that collects import parameters, the SVG-to-G-code generation (supported geometry and warnings), and the round-trip validity of the generated program inside the IDE.
+Defines the drawing import flow: the Import Image entry, the wizard that collects import parameters, the SVG-to-G-code generation (shape outlines regardless of paint, supported elements, warnings), and the round-trip validity of the generated program inside the IDE.
 
 ## ADDED Requirements
 
@@ -31,7 +31,7 @@ The wizard SHALL collect, with sensible defaults: the drawing's target size (sca
 - **THEN** no document is created and the current document is untouched
 
 ### Requirement: G-code generation from SVG geometry
-The generator SHALL convert the drawing's stroked geometry into a GRBL program in millimeters: open paths become open cut runs, closed shapes become closed loops; runs are separated by rapid moves at the safe height and each depth pass plunges from the previous pass. Curved segments SHALL be emitted within a stated tolerance (flattened polylines). The generated program SHALL respect the wizard's size, placement, depth, feed, and spindle parameters.
+The generator SHALL convert the drawing's shape outlines into a GRBL program in millimeters, regardless of paint (stroked, filled, or unpainted): open paths become open cut runs, closed shapes become closed loops; runs are separated by rapid moves at the safe height and each depth pass plunges from the previous pass. Curved segments SHALL be emitted within a stated tolerance (flattened polylines). The generated program SHALL respect the wizard's size, placement, depth, feed, and spindle parameters.
 
 #### Scenario: Drawing becomes cut runs
 - **WHEN** importing a drawing with an open polyline and a circle

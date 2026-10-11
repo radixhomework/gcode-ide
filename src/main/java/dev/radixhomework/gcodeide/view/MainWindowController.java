@@ -332,8 +332,12 @@ public class MainWindowController {
             return;
         }
         if (doc.isEmpty()) {
-            var alert = new Alert(Alert.AlertType.WARNING,
-                    "No importable stroked geometry found in the drawing.", ButtonType.OK);
+            var message = "No shape geometry found in the drawing."
+                    + "\nOnly text/images/unsupported elements were present.";
+            if (!doc.warnings().isEmpty()) {
+                message += "\n" + String.join("\n", doc.warnings());
+            }
+            var alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
             alert.setHeaderText("Import failed");
             alert.showAndWait();
             return;

@@ -46,11 +46,66 @@ class SvgDocumentTest {
     }
 
     @Test
-    void fillOnlyShapesAreSkipped() {
+    void fillOnlyShapeImportsAsOutline() {
+        // paint (fill/stroke/none) does not matter: the outline is the toolpath
         SvgDocument doc = SvgDocument.load(
                 "<svg width=\"10\" height=\"10\"><rect x=\"0\" y=\"0\" width=\"5\" height=\"5\" fill=\"red\"/></svg>");
-        assertTrue(doc.runs().isEmpty());
+        assertEquals(1, doc.runs().size());
+        assertTrue(doc.runs().get(0).closed());
         assertTrue(doc.warnings().isEmpty());
+    }
+
+    @Test
+    void noPaintGeometryImports() {
+        // common cutter-file style: pure geometry, no fill/stroke anywhere
+        SvgDocument doc = SvgDocument.load(
+                "<svg width=\"10\" height=\"10\"><rect x=\"0\" y=\"0\" width=\"50\" height=\"50\"/></svg>");
+        assertEquals(1, doc.runs().size());
+        assertTrue(doc.warnings().isEmpty());
+    }
+
+    @Test
+    void drawingWithOnlyNonShapesYieldsHintWarning() {
+        SvgDocument doc = SvgDocument.load(
+                "<svg width=\"10\" height=\"10\"><text x=\"0\" y=\"0\">hi</text></svg>");
+        assertTrue(doc.runs().isEmpty());
+        assertTrue(doc.warnings().stream()
+                .anyMatch(w -> w.contains("no shape geometry")), "hint warning present");
+    }
+
+    @Test
+    void classStyleStrokeIsApplied() {
+        SvgDocument doc = SvgDocument.load("""
+                <svg width="100" height="100">
+                  <style type="text/css">
+                    .st0 { fill:none; stroke:#000000; }
+                    path { fill:none; stroke:green; }
+                  </style>
+                  <path class="st0" d="M 0 0 L 50 50"/>
+                  <path d="M 0 0 L 50 50"/>
+                </svg>""");
+        assertEquals(2, doc.runs().size());
+        assertTrue(doc.warnings().isEmpty());
+    }
+
+    @Test
+    void cdataStyleBlockIsApplied() {
+        SvgDocument doc = SvgDocument.load("""
+                <svg width="100" height="100">
+                  <style><![CDATA[.a{stroke:#000;fill:none}]]></style>
+                  <path class="a" d="M 0 0 L 50 50"/>
+                </svg>""");
+        assertEquals(1, doc.runs().size());
+        assertTrue(doc.warnings().isEmpty());
+    }
+
+    @Test
+    void rootStrokeIsInherited() {
+        SvgDocument doc = SvgDocument.load("""
+                <svg width="100" height="100" stroke="black">
+                  <circle cx="50" cy="50" r="20" fill="none"/>
+                </svg>""");
+        assertEquals(1, doc.runs().size());
     }
 
     @Test

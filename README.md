@@ -43,8 +43,8 @@ horizontal scroll bars for long documents.
 set the target width, placement, depth per pass, final depth, cut feed,
 safe Z, and spindle speed, then Generate — the G-code opens in the editor
 as a new document with live preview. Supported elements: `path`, `rect`,
-`circle`, `ellipse`, `line`, `polyline`, `polygon` (stroked geometry;
-transforms translate/scale/rotate/matrix). Unsupported constructs are
+`circle`, `ellipse`, `line`, `polyline`, `polygon` (shape outlines,
+any paint; transforms translate/scale/rotate/matrix). Unsupported constructs are
 listed as warnings. Curves are flattened to 0.01 mm.
 
 ## The 3D preview
