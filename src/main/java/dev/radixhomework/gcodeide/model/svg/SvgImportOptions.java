@@ -9,5 +9,13 @@ public record SvgImportOptions(
         double finalDepth,
         double cutFeed,
         double safeZ,
-        int spindleRpm) {
+        int spindleRpm,
+        CutSide cutSide,
+        double cutterDiameterMm) {
+
+    public SvgImportOptions {
+        if (cutSide == null) {
+            cutSide = CutSide.ON_LINE;
+        }
+    }
 }

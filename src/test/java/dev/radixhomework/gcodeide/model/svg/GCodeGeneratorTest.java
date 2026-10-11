@@ -16,13 +16,15 @@ class GCodeGeneratorTest {
     }
 
     private static SvgImportOptions options(double widthMm, double depth, double finalDepth) {
-        return new SvgImportOptions(widthMm, 0, 0, depth, finalDepth, 600, 5, 10000);
+        return new SvgImportOptions(widthMm, 0, 0, depth, finalDepth, 600, 5, 10000,
+                CutSide.ON_LINE, 3.175);
     }
 
     private static SvgImportOptions options(double widthMm, double placeX, double placeY,
-            double depth, double finalDepth, double cutFeed, double safeZ, int spindle) {
+            double depth, double finalDepth, double cutFeed, double safeZ, int spindle,
+            CutSide cutSide, double cutterDiameter) {
         return new SvgImportOptions(widthMm, placeX, placeY, depth, finalDepth, cutFeed,
-                safeZ, spindle);
+                safeZ, spindle, cutSide, cutterDiameter);
     }
 
     @Test
@@ -59,7 +61,7 @@ class GCodeGeneratorTest {
                 <svg width="100" height="100">
                   <circle cx="50" cy="50" r="40" stroke="black" fill="none"/>
                 </svg>""");
-        String gcode = GCodeGenerator.generate(document, options(100, 10, 20, 0.5, -1.0, 600, 5, 10000));
+        String gcode = GCodeGenerator.generate(document, options(100, 10, 20, 0.5, -1.0, 600, 5, 10000, CutSide.ON_LINE, 3.175));
         for (String line : gcode.split("\n")) {
             if (line.startsWith("G1 X") || line.startsWith("G0 X")) {
                 // placement 10..110 x 20..120 (100mm wide centered circle is
@@ -81,7 +83,7 @@ class GCodeGeneratorTest {
                   <rect x="10" y="10" width="80" height="80" stroke="black" fill="none"/>
                   <circle cx="50" cy="50" r="20" stroke="black" fill="none"/>
                 </svg>""");
-        String gcode = GCodeGenerator.generate(document, options(100, 0, 0, 0.5, -0.5, 600, 5, 10000));
+        String gcode = GCodeGenerator.generate(document, options(100, 0, 0, 0.5, -0.5, 600, 5, 10000, CutSide.ON_LINE, 3.175));
         ParseResult result = dev.radixhomework.gcodeide.model.parsing.GCodeParser.parse(gcode);
         assertEquals(List.of(), result.diagnostics().stream()
                 .filter(d -> d.severity() == Severity.ERROR).toList(), "no ERROR diagnostics");

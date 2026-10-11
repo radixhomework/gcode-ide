@@ -42,7 +42,13 @@ horizontal scroll bars for long documents.
 **File > Import Image...** loads an SVG drawing and opens an import wizard:
 set the target width, placement, depth per pass, final depth, cut feed,
 safe Z, and spindle speed, then Generate — the G-code opens in the editor
-as a new document with live preview. Supported elements: `path`, `rect`,
+as a new document with live preview. The **Cut side** choice offsets closed
+shapes by half the cutter diameter (set in **Cutter diameter (mm)**, default
+3.175) so the tool edge follows the true boundary: **Inside** keeps the tool
+within the shape, **Outside** outside it, **On line** cuts along the drawn
+path. Geometry too tight for the cutter falls back to the on-line path with a
+warning; open paths always cut on-line (with a warning when a side is
+selected). Supported elements: `path`, `rect`,
 `circle`, `ellipse`, `line`, `polyline`, `polygon` (shape outlines,
 any paint; transforms translate/scale/rotate/matrix). Unsupported constructs are
 listed as warnings. Curves are flattened to 0.01 mm.

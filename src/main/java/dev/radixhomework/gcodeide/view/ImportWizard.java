@@ -1,6 +1,7 @@
 package dev.radixhomework.gcodeide.view;
 
 import dev.radixhomework.gcodeide.model.svg.GCodeGenerator;
+import dev.radixhomework.gcodeide.model.svg.CutSide;
 import dev.radixhomework.gcodeide.model.svg.SvgDocument;
 import dev.radixhomework.gcodeide.model.svg.SvgImportOptions;
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.function.Consumer;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
@@ -32,6 +34,8 @@ public class ImportWizard {
     private final TextField feedField = new TextField("600");
     private final TextField safeZField = new TextField("5");
     private final TextField spindleField = new TextField("10000");
+    private final ComboBox<CutSide> cutSideCombo = new ComboBox<>();
+    private final TextField cutterDiameterField = new TextField("3.175");
     private final Label errorLabel = new Label();
     private final List<String> warnings;
     private final SvgDocument doc;
@@ -61,6 +65,14 @@ public class ImportWizard {
         addRow(grid, row++, "Cut feed (mm/min):", feedField);
         addRow(grid, row++, "Safe Z (mm):", safeZField);
         addRow(grid, row++, "Spindle (RPM):", spindleField);
+        cutSideCombo.getItems().addAll(
+                CutSide.ON_LINE, CutSide.INSIDE, CutSide.OUTSIDE);
+        cutSideCombo.getSelectionModel().selectFirst();
+        grid.add(new Label("Cut side:"), 0, row);
+        grid.add(cutSideCombo, 1, row);
+        row++;
+        grid.add(new Label("Cutter diameter (mm):"), 0, row);
+        grid.add(cutterDiameterField, 1, row);
 
         var content = new VBox(10, sizeLabel, grid);
         if (!warnings.isEmpty()) {
@@ -110,7 +122,9 @@ public class ImportWizard {
                     Double.parseDouble(finalDepthField.getText().trim()),
                     Double.parseDouble(feedField.getText().trim()),
                     Double.parseDouble(safeZField.getText().trim()),
-                    (int) Double.parseDouble(spindleField.getText().trim()));
+                    (int) Double.parseDouble(spindleField.getText().trim()),
+                    cutSideCombo.getValue(),
+                    Double.parseDouble(cutterDiameterField.getText().trim()));
             errorLabel.setText("");
             return options;
         } catch (NumberFormatException e) {
@@ -129,6 +143,10 @@ public class ImportWizard {
 
     public TextField widthFieldForTest() {
         return widthField;
+    }
+
+    public ComboBox<CutSide> cutSideComboForTest() {
+        return cutSideCombo;
     }
 
     public Button generateButtonForTest() {

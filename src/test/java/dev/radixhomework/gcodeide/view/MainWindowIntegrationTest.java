@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.radixhomework.gcodeide.model.parsing.GCodeParser;
+import dev.radixhomework.gcodeide.model.parsing.MoveKind;
+import dev.radixhomework.gcodeide.model.svg.CutSide;
 import dev.radixhomework.gcodeide.service.ConfigService;
 import dev.radixhomework.gcodeide.service.DocumentService.SaveDecision;
 import java.io.IOException;
@@ -365,6 +368,34 @@ class MainWindowIntegrationTest extends ApplicationTest {
         interact(() -> controller.lastImportWizard().cancelButtonForTest().fire());
         assertFalse(controller.lastImportWizard().isShowing());
         assertEquals("", controller.getEditor().getText(), "nothing imported on Cancel");
+    }
+
+    @Test
+    void importWizardInsideCutOffsetsClosedRuns() throws Exception {
+        var fixture = dir.resolve("square.svg");
+        Files.writeString(fixture, """
+                <svg width="40" height="40">
+                  <rect x="0" y="0" width="40" height="40" stroke="black" fill="none"/>
+                </svg>""");
+        interact(() -> controller.openImportWizard(fixture));
+        waitUntil(() -> controller.lastImportWizard() != null
+                && controller.lastImportWizard().isShowing());
+        interact(() -> {
+            var wizard = controller.lastImportWizard();
+            wizard.widthFieldForTest().setText("40");
+            wizard.cutSideComboForTest().getSelectionModel().select(CutSide.INSIDE);
+        });
+        interact(() -> controller.lastImportWizard().generateButtonForTest().fire());
+
+        String gcode = controller.getEditor().getText();
+        assertTrue(gcode.contains("(cut side: inside)"), "cut side comment present");
+        double minX = Double.POSITIVE_INFINITY;
+        for (var move : GCodeParser.parse(gcode).moves()) {
+            if (move.kind() == MoveKind.CUT) {
+                minX = Math.min(minX, Math.min(move.start().x(), move.end().x()));
+            }
+        }
+        assertEquals(1.5875, minX, 0.01, "inside cut shrinks by the cutter radius");
     }
 
     @Test
