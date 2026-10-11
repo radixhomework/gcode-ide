@@ -43,7 +43,10 @@ public class GCodeEditorView {
 
     public GCodeEditorView() {
         codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
-        var stylesheets = codeArea.getStylesheets();
+        // stylesheets live on the scroll wrapper: it carries the .tokens
+        // class app.css needs as a lookup root, and its subtree contains
+        // the codeArea, so every editor rule resolves inside any scene
+        var stylesheets = scrollPane.getStylesheets();
         stylesheets.add(getClass().getResource("/app.css").toExternalForm());
         stylesheets.add(getClass().getResource("/editor.css").toExternalForm());
         // RichTextFX styles the area font via CSS, not setFont
@@ -97,6 +100,11 @@ public class GCodeEditorView {
         });
         completionPopup.getContent().add(suggestionList);
         completionPopup.setAutoHide(true);
+        // the popup renders in its own scene without a .root lookup chain;
+        // .tokens on the list gives app.css's variables a root there
+        suggestionList.getStyleClass().add("tokens");
+        suggestionList.getStylesheets()
+                .add(getClass().getResource("/app.css").toExternalForm());
 
         docLabel.getStyleClass().add("doc-popup");
         var docPane = new StackPane(docLabel);

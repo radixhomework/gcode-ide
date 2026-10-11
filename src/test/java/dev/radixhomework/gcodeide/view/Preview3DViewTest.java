@@ -22,6 +22,10 @@ class Preview3DViewTest extends ApplicationTest {
 
     @Override
     public void start(Stage stage) {
+        // production runs on an AtlantaFX UA stylesheet; without it the
+        // -gd-*/-color-* CSS lookups cannot resolve and spam warnings
+        atlantafx.base.theme.ThemeManager.instance()
+                .setTheme(new atlantafx.base.theme.PrimerLight());
         view = new Preview3DView();
         stage.setScene(new javafx.scene.Scene(view.node(), 500, 350));
         stage.show();

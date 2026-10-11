@@ -17,6 +17,10 @@ class EditorViewTest extends ApplicationTest {
 
     @Override
     public void start(Stage stage) {
+        // production runs on an AtlantaFX UA stylesheet; without it the
+        // -gd-*/-color-* CSS lookups cannot resolve and spam warnings
+        atlantafx.base.theme.ThemeManager.instance()
+                .setTheme(new atlantafx.base.theme.PrimerLight());
         editor = new GCodeEditorView();
         stage.setScene(new javafx.scene.Scene(editor.node(), 400, 250));
         stage.show();

@@ -34,6 +34,10 @@ class MainWindowIntegrationTest extends ApplicationTest {
 
     @Override
     public void start(Stage stage) throws IOException {
+        // production runs on an AtlantaFX UA stylesheet; without it the
+        // -gd-*/-color-* CSS lookups cannot resolve and spam warnings
+        atlantafx.base.theme.ThemeManager.instance()
+                .setTheme(new atlantafx.base.theme.PrimerLight());
         configService = new ConfigService(dir.resolve("config.yaml"));
         saveTarget = dir.resolve("saved.nc");
         controller = MainWindowController.create(
@@ -42,7 +46,9 @@ class MainWindowIntegrationTest extends ApplicationTest {
                 suggested -> Optional.ofNullable(previewImageTarget.get()),
                 title -> Optional.of(dir.resolve("import.svg")));
         // keep the cancel-only default prompt: no real modal can ever block a test
-        stage.setScene(new javafx.scene.Scene(controller.root(), 900, 600));
+        var scene = new javafx.scene.Scene(controller.root(), 900, 600);
+        scene.getStylesheets().add(getClass().getResource("/app.css").toExternalForm());
+        stage.setScene(scene);
         stage.show();
     }
 
