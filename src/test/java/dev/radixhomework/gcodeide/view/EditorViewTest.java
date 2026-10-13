@@ -22,7 +22,16 @@ class EditorViewTest extends ApplicationTest {
         atlantafx.base.theme.ThemeManager.instance()
                 .setTheme(new atlantafx.base.theme.PrimerLight());
         editor = new GCodeEditorView();
-        stage.setScene(new javafx.scene.Scene(editor.node(), 400, 250));
+        // Scene + scene-level app.css, mirroring App.start. Note: the
+        // editor subtree's FIRST CSS pass after construction logs ~10
+        // unresolvable-lookup warnings from editor.css/atlantafx rules no
+        // matter where stylesheets are attached (Scene-constructor and
+        // setRoot passes were both probed); later passes are clean and
+        // MainWindowIntegrationTest/production show none. See
+        // .zcode/notes.md "residual CSS warnings" before digging further.
+        var scene = new javafx.scene.Scene(editor.node(), 400, 250);
+        scene.getStylesheets().add(getClass().getResource("/app.css").toExternalForm());
+        stage.setScene(scene);
         stage.show();
     }
 
