@@ -37,7 +37,7 @@ sections that did not apply were removed.)
 Two gates apply:
 
 - **Local build**: `mvn test` passes (plain-JUnit model/service suites +
-  TestFX view suites, currently 110+ tests), and `mvn -q package` builds the
+  TestFX view suites, currently 150+ tests), and `mvn -q package` builds the
   shaded jar.
 - **SonarQube Cloud**: `.github/workflows/quality.yml` is the CI gate —
   build, full test suite and scan on push to `main` and on PRs to `main`
