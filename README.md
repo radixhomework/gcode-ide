@@ -88,6 +88,17 @@ mvn test              # model/service (plain JUnit) + view (TestFX) suites
 mvn javafx:run        # run the app
 ```
 
+### Continuous analysis (SonarQube Cloud)
+
+`.github/workflows/sonarcloud.yml` compiles the sources and pushes the
+analysis to the `gcode-ide` project in the `radixhomework` organization at
+[sonarcloud.io](https://sonarcloud.io) on every push to `main` and on pull
+requests to `main`. All Sonar configuration
+(organization, project key, host, scanner version) lives in that workflow —
+the pom holds none. The scan authenticates with the repository secret
+`SONAR_TOKEN`. Analysis is launched only by this workflow: no tests run in
+it and local builds never contact SonarCloud.
+
 Architecture: MVC with a strict boundary — all domain logic (parsing,
 statistics/warnings) is pure Java with no JavaFX imports, so it is testable
 headlessly and reusable by later phases (the SVG-import generator's
@@ -118,3 +129,8 @@ dist-java/gcode-ide/gcode-ide.exe            # or --version to verify
 
 `assets/logo.ico` is the 256x256 icon conversion of `assets/logo.png` used
 for the executable; the window icon is loaded from the PNG at runtime.
+
+Releases are automated: pushing a `v*` tag (e.g. `v0.1.0`) runs
+`.github/workflows/release.yml`, which builds the same app image on a
+Windows runner (tests are skipped) and uploads
+`gcode-ide-<tag>-windows-x64.zip` to the tag's GitHub release.
