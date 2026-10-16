@@ -21,18 +21,39 @@ public record Mat(double a, double b, double c, double d, double e, double f) {
     }
 
     /** Parses a transform attribute; throws UnsupportedOperationException for
-     *  transforms outside the supported subset (translate/scale/rotate/matrix). */
+     *  transforms outside the supported subset (translate/scale/rotate/matrix).
+     *  Scanned by hand (not regex) so no input can trigger backtracking blowups. */
     public static Mat parse(String transform) {
         Mat result = IDENTITY;
-        var m = java.util.regex.Pattern
-                .compile("(\\w++)\\s*+\\(([^)]*+)\\)")
-                .matcher(transform == null ? "" : transform);
-        while (m.find()) {
-            String op = m.group(1);
-            double[] v = java.util.Arrays.stream(m.group(2).trim().split("[\\s,]+"))
-                    .mapToDouble(s -> s.isBlank() ? 0 : Double.parseDouble(s))
+        String s = transform == null ? "" : transform;
+        int i = 0;
+        while (i < s.length()) {
+            if (!Character.isLetter(s.charAt(i)) && s.charAt(i) != '_') {
+                i++;
+                continue;
+            }
+            int nameStart = i;
+            while (i < s.length()
+                    && (Character.isLetterOrDigit(s.charAt(i)) || s.charAt(i) == '_')) {
+                i++;
+            }
+            String op = s.substring(nameStart, i);
+            while (i < s.length() && Character.isWhitespace(s.charAt(i))) {
+                i++;
+            }
+            if (i >= s.length() || s.charAt(i) != '(') {
+                continue; // word without an argument list: keep scanning
+            }
+            int close = s.indexOf(')', i);
+            if (close < 0) {
+                break;
+            }
+            double[] v = java.util.Arrays
+                    .stream(s.substring(i + 1, close).trim().split("[\\s,]+"))
+                    .mapToDouble(t -> t.isBlank() ? 0 : Double.parseDouble(t))
                     .toArray();
             result = result.multiply(parseOp(op, v));
+            i = close + 1;
         }
         return result;
     }

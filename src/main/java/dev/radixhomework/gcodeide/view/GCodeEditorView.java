@@ -247,10 +247,14 @@ public class GCodeEditorView {
             return;
         }
         String prefix = wordPrefixBeforeCaret();
+        if (prefix.isEmpty()) {
+            completionPopup.hide();
+            return;
+        }
         List<String> suggestions = GCodeWords.suggestionsFor(prefix).stream()
                 .map(GCodeWords.Entry::display)
                 .toList();
-        if (prefix.isEmpty() || suggestions.isEmpty()) {
+        if (suggestions.isEmpty()) {
             completionPopup.hide();
             return;
         }

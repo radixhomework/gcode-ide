@@ -277,7 +277,13 @@ final class SvgDocumentLoader {
         if (value == null || value.isBlank()) {
             return 0;
         }
-        return Double.parseDouble(value.trim().replaceAll("[a-z%]++$", ""));
+        String s = value.trim();
+        int end = s.length();
+        while (end > 0
+                && (Character.isLowerCase(s.charAt(end - 1)) || s.charAt(end - 1) == '%')) {
+            end--; // strip a trailing unit suffix (px, %, ...)
+        }
+        return Double.parseDouble(s.substring(0, end));
     }
 
     // -- document size ------------------------------------------------------------------
