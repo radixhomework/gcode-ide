@@ -127,7 +127,7 @@ public class ImportWizard {
                     Double.parseDouble(cutterDiameterField.getText().trim()));
             errorLabel.setText("");
             return options;
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             errorLabel.setText("Invalid number - check the fields.");
             return null;
         }

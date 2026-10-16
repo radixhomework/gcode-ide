@@ -27,9 +27,16 @@ public final class SvgFlattener {
         List<Run> runs = new ArrayList<>();
         List<double[]> pts = new ArrayList<>();
         boolean closed = false;
-        double cx = 0, cy = 0, sx = 0, sy = 0;
-        double lastC2x = 0, lastC2y = 0, lastQx = 0, lastQy = 0;
-        boolean lastWasCubic = false, lastWasQuad = false;
+        double cx = 0;
+        double cy = 0;
+        double sx = 0;
+        double sy = 0;
+        double lastC2x = 0;
+        double lastC2y = 0;
+        double lastQx = 0;
+        double lastQy = 0;
+        boolean lastWasCubic = false;
+        boolean lastWasQuad = false;
 
         for (SvgPathData.Cmd cmd : cmds) {
             char letter = Character.toUpperCase(cmd.letter());
@@ -115,8 +122,11 @@ public final class SvgFlattener {
                     cy = ey;
                 }
                 case 'A' -> {
-                    double rx = a[0], ry = a[1], phi = Math.toRadians(a[2]);
-                    boolean largeArc = a[3] != 0, sweep = a[4] != 0;
+                    double rx = a[0];
+                    double ry = a[1];
+                    double phi = Math.toRadians(a[2]);
+                    boolean largeArc = a[3] != 0;
+                    boolean sweep = a[4] != 0;
                     double ex = rel ? cx + a[5] : a[5];
                     double ey = rel ? cy + a[6] : a[6];
                     flattenArc(pts, cx, cy, rx, ry, phi, largeArc, sweep, ex, ey, tolerance);
@@ -157,12 +167,18 @@ public final class SvgFlattener {
             return;
         }
         // De Casteljau split at t = 0.5
-        double a1x = (x0 + c1x) / 2, a1y = (y0 + c1y) / 2;   // P01
-        double a2x = (c1x + c2x) / 2, a2y = (c1y + c2y) / 2; // P12
-        double b2x = (c2x + x1) / 2, b2y = (c2y + y1) / 2;   // P23
-        double p012x = (a1x + a2x) / 2, p012y = (a1y + a2y) / 2;
-        double p123x = (a2x + b2x) / 2, p123y = (a2y + b2y) / 2;
-        double mx = (p012x + p123x) / 2, my = (p012y + p123y) / 2; // on-curve M
+        double a1x = (x0 + c1x) / 2;
+        double a1y = (y0 + c1y) / 2;   // P01
+        double a2x = (c1x + c2x) / 2;
+        double a2y = (c1y + c2y) / 2; // P12
+        double b2x = (c2x + x1) / 2;
+        double b2y = (c2y + y1) / 2;   // P23
+        double p012x = (a1x + a2x) / 2;
+        double p012y = (a1y + a2y) / 2;
+        double p123x = (a2x + b2x) / 2;
+        double p123y = (a2y + b2y) / 2;
+        double mx = (p012x + p123x) / 2;
+        double my = (p012y + p123y) / 2; // on-curve M
         flattenCubic(out, x0, y0, a1x, a1y, p012x, p012y, mx, my, tol, depth + 1);
         flattenCubic(out, mx, my, p123x, p123y, b2x, b2y, x1, y1, tol, depth + 1);
     }
@@ -173,9 +189,12 @@ public final class SvgFlattener {
             out.add(new double[] {x1, y1});
             return;
         }
-        double c1x = (x0 + qx) / 2, c1y = (y0 + qy) / 2;
-        double c2x = (qx + x1) / 2, c2y = (qy + y1) / 2;
-        double mx = (c1x + c2x) / 2, my = (c1y + c2y) / 2;
+        double c1x = (x0 + qx) / 2;
+        double c1y = (y0 + qy) / 2;
+        double c2x = (qx + x1) / 2;
+        double c2y = (qy + y1) / 2;
+        double mx = (c1x + c2x) / 2;
+        double my = (c1y + c2y) / 2;
         flattenQuad(out, x0, y0, c1x, c1y, mx, my, tol, depth + 1);
         flattenQuad(out, mx, my, c2x, c2y, x1, y1, tol, depth + 1);
     }
@@ -183,7 +202,8 @@ public final class SvgFlattener {
     /** Max perpendicular distance of the control points to the chord. */
     private static boolean flatEnough(double x0, double y0, double c1x, double c1y,
             double x1, double y1, double c2x, double c2y, double tol) {
-        double dx = x1 - x0, dy = y1 - y0;
+        double dx = x1 - x0;
+        double dy = y1 - y0;
         double len = Math.hypot(dx, dy);
         if (len < 1e-12) {
             return Math.hypot(c1x - x0, c1y - y0) <= tol
@@ -200,10 +220,12 @@ public final class SvgFlattener {
         rx = Math.abs(rx);
         ry = Math.abs(ry);
         if (rx < 1e-12 || ry < 1e-12) {
-            return null;
+            return new double[0];
         }
-        double cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
-        double dx2 = (x1 - x2) / 2, dy2 = (y1 - y2) / 2;
+        double cosPhi = Math.cos(phi);
+        double sinPhi = Math.sin(phi);
+        double dx2 = (x1 - x2) / 2;
+        double dy2 = (y1 - y2) / 2;
         double x1p = cosPhi * dx2 + sinPhi * dy2;
         double y1p = -sinPhi * dx2 + cosPhi * dy2;
         double lambda = x1p * x1p / (rx * rx) + y1p * y1p / (ry * ry);
@@ -224,22 +246,13 @@ public final class SvgFlattener {
         return new double[] {cx, cy};
     }
 
-    private static double arcAngle(double ux, double uy, double vx, double vy) {
-        double dot = ux * vx + uy * vy;
-        double len = Math.hypot(ux, uy) * Math.hypot(vx, vy);
-        double a = Math.acos(Math.max(-1, Math.min(1, dot / len)));
-        if (ux * vy - uy * vx < 0) {
-            a = -a;
-        }
-        return a;
-    }
-
     private static void flattenArc(List<double[]> out, double x1, double y1,
             double rx, double ry, double phi, boolean largeArc, boolean sweep,
             double x2, double y2, double tol) {
-        double cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+        double cosPhi = Math.cos(phi);
+        double sinPhi = Math.sin(phi);
         double[] center = arcCenter(x1, y1, rx, ry, phi, largeArc, sweep, x2, y2);
-        if (center == null) { // degenerate radii: straight line
+        if (center.length == 0) { // degenerate radii: straight line
             out.add(new double[] {x2, y2});
             return;
         }

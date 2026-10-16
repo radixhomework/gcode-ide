@@ -8,8 +8,6 @@ import org.junit.jupiter.api.Test;
 
 class SvgFlattenerTest {
 
-    private static final double TOL = 0.01;
-
     @Test
     void lineProducesTwoPointRun() {
         var runs = SvgFlattener.flatten(SvgPathData.parse("M 0 0 L 30 0"));
@@ -26,25 +24,6 @@ class SvgFlattenerTest {
         var pts = runs.get(0).points();
         assertEquals(pts.get(0)[0], pts.get(pts.size() - 1)[0], 1e-9);
         assertEquals(pts.get(0)[1], pts.get(pts.size() - 1)[1], 1e-9);
-    }
-
-    private static double maxDeviationFromCubic(List<double[]> pts,
-            double c1x, double c1y, double c2x, double c2y) {
-        // dense sampling of the true cubic
-        double max = 0;
-        int startIdx = 1; // skip the start point (exact)
-        for (int i = startIdx; i < pts.size(); i++) {
-            double t = (double) (i - startIdx) / (pts.size() - 1 - startIdx);
-            double bx = bezier1(t, pts.get(i - 1)[0], c1x, c2x, pts.get(i)[0]);
-            double by = bezier1(t, pts.get(i - 1)[1], c1y, c2y, pts.get(i)[1]);
-            max = Math.max(max, distancePointToPolyline(bx, by, pts));
-        }
-        return max;
-    }
-
-    private static double bezier1(double t, double p0, double p1, double p2, double p3) {
-        double u = 1 - t;
-        return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3;
     }
 
     private static double distancePointToPolyline(double px, double py,

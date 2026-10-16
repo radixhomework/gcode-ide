@@ -1,6 +1,7 @@
 package dev.radixhomework.gcodeide.model.svg;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -23,6 +24,25 @@ public final class SvgPathData {
 
         public char absolute() {
             return Character.toUpperCase(letter);
+        }
+
+        // array components need content-based object methods (record defaults
+        // would compare identity)
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Cmd other
+                    && letter == other.letter
+                    && Arrays.equals(args, other.args);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Character.hashCode(letter) + Arrays.hashCode(args);
+        }
+
+        @Override
+        public String toString() {
+            return letter + Arrays.toString(args);
         }
     }
 

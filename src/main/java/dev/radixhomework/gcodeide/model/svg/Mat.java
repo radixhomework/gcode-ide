@@ -25,7 +25,7 @@ public record Mat(double a, double b, double c, double d, double e, double f) {
     public static Mat parse(String transform) {
         Mat result = IDENTITY;
         var m = java.util.regex.Pattern
-                .compile("(\\w+)\\s*\\(([^)]*)\\)")
+                .compile("(\\w++)\\s*+\\(([^)]*+)\\)")
                 .matcher(transform == null ? "" : transform);
         while (m.find()) {
             String op = m.group(1);
@@ -47,7 +47,8 @@ public record Mat(double a, double b, double c, double d, double e, double f) {
                 return new Mat(sx, 0, 0, sy, 0, 0);
             case "rotate":
                 double rad = Math.toRadians(v[0]);
-                double cos = Math.cos(rad), sin = Math.sin(rad);
+                double cos = Math.cos(rad);
+                double sin = Math.sin(rad);
                 Mat rotation = new Mat(cos, sin, -sin, cos, 0, 0);
                 if (v.length >= 3) {
                     rotation = rotation.multiply(

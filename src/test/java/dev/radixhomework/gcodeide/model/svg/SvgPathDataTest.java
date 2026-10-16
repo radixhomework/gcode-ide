@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 class SvgPathDataTest {
 
     private static List<Character> letters(String d) {
-        return SvgPathData.parse(d).stream().map(c -> c.letter()).toList();
+        return SvgPathData.parse(d).stream().map(SvgPathData.Cmd::letter).toList();
     }
 
     @Test

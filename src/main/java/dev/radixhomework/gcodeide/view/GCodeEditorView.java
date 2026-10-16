@@ -41,21 +41,25 @@ public class GCodeEditorView {
     /** Hover delay before the documentation popup appears. */
     public static final double HOVER_DOC_DELAY_MS = 2000;
 
+    private static final String APP_CSS = "/app.css";
+    private static final String EDITOR_CSS = "/editor.css";
+    private static final String TOKENS_CLASS = "tokens";
+
     public GCodeEditorView() {
         codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
         // stylesheets live on the scroll wrapper: it carries the .tokens
         // class app.css needs as a lookup root, and its subtree contains
         // the codeArea, so every editor rule resolves inside any scene
         var stylesheets = scrollPane.getStylesheets();
-        stylesheets.add(getClass().getResource("/app.css").toExternalForm());
-        stylesheets.add(getClass().getResource("/editor.css").toExternalForm());
+        stylesheets.add(getClass().getResource(APP_CSS).toExternalForm());
+        stylesheets.add(getClass().getResource(EDITOR_CSS).toExternalForm());
         // RichTextFX styles the area font via CSS, not setFont
         codeArea.setStyle("-fx-font-family: '" + monoFamily() + "'; -fx-font-size: 13px;");
         // let the SplitPane shrink the editor freely
         codeArea.setMinWidth(0);
         // token lookup root: with the scroll wrapper the codeArea is no longer
         // the scene root, so .root would not match it
-        scrollPane.getStyleClass().add("tokens");
+        scrollPane.getStyleClass().add(TOKENS_CLASS);
         codeArea.plainTextChanges().subscribe(change -> {
             restyleAffected(change.getPosition(), change.getInsertionEnd());
             updateCompletionPopup();
@@ -102,14 +106,14 @@ public class GCodeEditorView {
         completionPopup.setAutoHide(true);
         // the popup renders in its own scene without a .root lookup chain;
         // .tokens on the list gives app.css's variables a root there
-        suggestionList.getStyleClass().add("tokens");
+        suggestionList.getStyleClass().add(TOKENS_CLASS);
         suggestionList.getStylesheets()
-                .add(getClass().getResource("/app.css").toExternalForm());
+                .add(getClass().getResource(APP_CSS).toExternalForm());
 
         docLabel.getStyleClass().add("doc-popup");
         var docPane = new StackPane(docLabel);
-        docPane.getStyleClass().add("tokens");
-        docPane.getStylesheets().add(getClass().getResource("/app.css").toExternalForm());
+        docPane.getStyleClass().add(TOKENS_CLASS);
+        docPane.getStylesheets().add(getClass().getResource(APP_CSS).toExternalForm());
         docPopup.getContent().add(docPane);
         docPopup.setAutoHide(true);
         hoverTimer.setOnFinished(event -> showDocumentationForHover(hoverX, hoverY));
@@ -300,7 +304,7 @@ public class GCodeEditorView {
     // -- documentation popup (hover / Ctrl+Q) ---------------------------------------
 
     /** The [start, end) range of the word (letter(s) plus trailing digits)
-     *  at position {@code column}, or null. */
+     *  at position {@code column}, or an empty array. */
     static int[] wordRangeAt(String paragraph, int column) {
         int n = paragraph == null ? 0 : paragraph.length();
         for (int idx : new int[] {column, column - 1}) {
@@ -320,35 +324,36 @@ public class GCodeEditorView {
                 return new int[] {start, end};
             }
         }
-        return null;
+        return new int[0];
     }
 
     /** The word at position {@code column}, or "". */
     static String wordAt(String paragraph, int column) {
         int[] range = wordRangeAt(paragraph, column);
-        return range == null ? "" : paragraph.substring(range[0], range[1]);
+        return range.length == 0 ? "" : paragraph.substring(range[0], range[1]);
     }
 
-    /** {paragraph, start, end} of the word at (or nearest) the caret, or null. */
+    /** {paragraph, start, end} of the word at (or nearest) the caret, or an
+     *  empty array. */
     private int[] wordRangeNearCaret() {
         int paragraph = codeArea.getCurrentParagraph();
         String paragraphText = codeArea.getParagraph(paragraph).getText();
         int column = codeArea.getCaretColumn();
         int[] range = wordRangeAt(paragraphText, column);
-        if (range != null) {
+        if (range.length != 0) {
             return new int[] {paragraph, range[0], range[1]};
         }
         for (int d = 1; d <= paragraphText.length(); d++) {
             range = wordRangeAt(paragraphText, column - d);
-            if (range != null) {
+            if (range.length != 0) {
                 return new int[] {paragraph, range[0], range[1]};
             }
             range = wordRangeAt(paragraphText, column + d);
-            if (range != null) {
+            if (range.length != 0) {
                 return new int[] {paragraph, range[0], range[1]};
             }
         }
-        return null;
+        return new int[0];
     }
 
     /** The documentation line for a word, or null when unknown. Trailing
@@ -385,7 +390,7 @@ public class GCodeEditorView {
                 org.fxmisc.richtext.model.TwoDimensional.Bias.Backward);
         String paragraphText = codeArea.getParagraph(position.getMajor()).getText();
         int[] range = wordRangeAt(paragraphText, position.getMinor());
-        String doc = range == null ? null
+        String doc = range.length == 0 ? null
                 : documentationFor(paragraphText.substring(range[0], range[1]));
         if (doc == null) {
             return;
@@ -402,7 +407,7 @@ public class GCodeEditorView {
 
     void showDocumentationForCaret() {
         int[] anchor = wordRangeNearCaret();
-        String doc = anchor == null ? null : documentationFor(
+        String doc = anchor.length == 0 ? null : documentationFor(
                 codeArea.getParagraph(anchor[0]).getText().substring(anchor[1], anchor[2]));
         if (doc == null) {
             return;

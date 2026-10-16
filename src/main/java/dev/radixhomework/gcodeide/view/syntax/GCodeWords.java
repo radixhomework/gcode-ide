@@ -2,6 +2,7 @@ package dev.radixhomework.gcodeide.view.syntax;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
 /**
  * The documented GRBL word table powering autocompletion (pure Java). The
@@ -45,9 +46,10 @@ public final class GCodeWords {
     private GCodeWords() {
     }
 
-    /** Entries whose code starts with the prefix (case-insensitive), in table order. */
-    public static List<Entry> suggestionsFor(String prefix) {
-        String p = prefix == null ? "" : prefix.toLowerCase(Locale.ROOT);
+    /** Entries whose code starts with the typed prefix (case-insensitive),
+     *  in table order. */
+    public static List<Entry> suggestionsFor(String typed) {
+        String p = Objects.requireNonNullElse(typed, "").toLowerCase(Locale.ROOT);
         return ENTRIES.stream()
                 .filter(e -> e.code().toLowerCase(Locale.ROOT).startsWith(p))
                 .toList();

@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class SvgDocumentTest {
@@ -112,5 +111,16 @@ class SvgDocumentTest {
     void unparseableSvgThrows() {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> SvgDocument.load("<svg><unclosed>"));
+    }
+
+    @Test
+    void doctypeAndExternalEntitiesAreRejected() {
+        // untrusted SVG must never resolve external entities (XXE): with the
+        // hardened parser any DOCTYPE refuses the document outright
+        String svg = """
+                <!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/hostname">]>
+                <svg width="10" height="10"><rect width="5" height="5"/>&xxe;</svg>""";
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> SvgDocument.load(svg));
     }
 }

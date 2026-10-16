@@ -1,6 +1,5 @@
 package dev.radixhomework.gcodeide.model.svg;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
