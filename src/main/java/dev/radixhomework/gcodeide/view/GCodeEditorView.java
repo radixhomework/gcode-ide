@@ -371,6 +371,12 @@ public class GCodeEditorView {
     }
 
     private void showDocumentationForHover(double x, double y) {
+        // hit() maps coordinates through the screen; when the window has no
+        // mappable screen (CI display sessions, disconnected RDP) that path
+        // NPEs inside RichTextFX — and a popup could not be positioned anyway.
+        if (codeArea.localToScreen(0, 0) == null) {
+            return;
+        }
         var hit = codeArea.hit(x, y);
         if (hit.getCharacterIndex().isEmpty()) {
             return;
