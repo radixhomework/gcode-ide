@@ -211,7 +211,7 @@ class EditorViewTest extends ApplicationTest {
     // --- sticky documentation popup (task 1.2) ----------------------------------------
 
     @Test
-    void docPopupStaysWhileCursorStaysOnKeyword() throws Exception {
+    void docPopupStaysWhileCursorStaysOnKeyword() {
         editor.setHoverDocDelayMillis(60);
         interact(() -> editor.setText("G2 X10\nG3 X10\n"));
         var bounds = new java.util.concurrent.atomic.AtomicReference<javafx.geometry.Bounds>();
@@ -238,7 +238,7 @@ class EditorViewTest extends ApplicationTest {
     }
 
     @Test
-    void docPopupHidesOnKeyPress() throws Exception {
+    void docPopupHidesOnKeyPress() {
         editor.setHoverDocDelayMillis(60);
         interact(() -> editor.setText("G2 X10\n"));
         var bounds = new java.util.concurrent.atomic.AtomicReference<javafx.geometry.Bounds>();

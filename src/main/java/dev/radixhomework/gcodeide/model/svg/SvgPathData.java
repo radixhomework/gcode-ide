@@ -30,9 +30,9 @@ public final class SvgPathData {
         // would compare identity)
         @Override
         public boolean equals(Object o) {
-            return o instanceof Cmd other
-                    && letter == other.letter
-                    && Arrays.equals(args, other.args);
+            return o instanceof Cmd(char otherLetter, double[] otherArgs)
+                    && letter == otherLetter
+                    && Arrays.equals(args, otherArgs);
         }
 
         @Override
@@ -46,8 +46,9 @@ public final class SvgPathData {
         }
     }
 
-    private static final Pattern TOKEN =
-            Pattern.compile("([A-Za-z])|([+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?)");
+    private static final Pattern LETTER = Pattern.compile("[A-Za-z]");
+    private static final Pattern NUMBER =
+            Pattern.compile("[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?");
 
     private static final Map<Character, Integer> ARGS = Map.of(
             'M', 2, 'L', 2, 'H', 1, 'V', 1,
@@ -68,12 +69,21 @@ public final class SvgPathData {
     public static List<Cmd> parse(String d) {
         List<Cmd> cmds = new ArrayList<>();
         ParseState state = new ParseState();
-        Matcher m = TOKEN.matcher(d == null ? "" : d);
-        while (m.find()) {
-            if (m.group(1) != null) {
-                startCommand(cmds, state, m.group());
+        String s = d == null ? "" : d;
+        Matcher number = NUMBER.matcher(s);
+        int pos = 0;
+        while (pos < s.length()) {
+            char c = s.charAt(pos);
+            boolean isLetter = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+            number.region(pos, s.length());
+            if (isLetter) {
+                startCommand(cmds, state, s.substring(pos, pos + 1));
+                pos++;
+            } else if (number.lookingAt()) {
+                addNumber(cmds, state, s.substring(pos, number.end()));
+                pos = number.end();
             } else {
-                addNumber(cmds, state, m.group());
+                pos++; // unmatchable separator: skipped, as the scanner always did
             }
         }
         flushGroup(cmds, state);

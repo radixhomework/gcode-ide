@@ -328,10 +328,10 @@ public class GCodeEditorView {
             return new int[0];
         }
         int[] range = wordRangeAround(paragraph, column);
-        if (range == null) {
+        if (range.length == 0) {
             range = wordRangeAround(paragraph, column - 1);
         }
-        return range != null ? range : new int[0];
+        return range;
     }
 
     /** The word range that contains {@code index}, looking left over digits. */
@@ -342,7 +342,7 @@ public class GCodeEditorView {
             i--; // digits never anchor a word: keep looking left for the letter
         }
         if (i < 0 || i >= n || !Character.isLetter(paragraph.charAt(i))) {
-            return null;
+            return new int[0];
         }
         int start = i;
         while (start > 0 && Character.isLetter(paragraph.charAt(start - 1))) {
@@ -465,7 +465,7 @@ public class GCodeEditorView {
         }
         int[] range = wordRangeAt(
                 codeArea.getParagraph(position.getMajor()).getText(), position.getMinor());
-        return range != null && range[0] == anchorStart && range[1] == anchorEnd;
+        return range.length == 2 && range[0] == anchorStart && range[1] == anchorEnd;
     }
 
     void hideDocumentation() {

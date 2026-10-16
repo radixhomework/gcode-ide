@@ -65,7 +65,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
     }
 
     @Test
-    void syntaxErrorSetsStaleIndicator() throws Exception {
+    void syntaxErrorSetsStaleIndicator() {
         interact(() -> controller.loadText("G0 X10\nG1 X20 F600\n"));
         waitUntil(() -> controller.getPreview().segmentCount() == 2);
         interact(() -> controller.getEditor().setText("G0 X10\nG1 X\n"));
@@ -76,7 +76,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
     // --- status bar ---------------------------------------------------------------
 
     @Test
-    void statisticsRenderedForKnownProgram() throws Exception {
+    void statisticsRenderedForKnownProgram() {
         interact(() -> controller.loadText("G1 X10 F600\n"));
         waitUntil(() -> controller.statsText().contains("bbox"));
         String stats = controller.statsText();
@@ -87,7 +87,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
     }
 
     @Test
-    void missingFeedWarningShown() throws Exception {
+    void missingFeedWarningShown() {
         interact(() -> controller.loadText("G1 X10\n"));
         waitUntil(() -> "1 warning(s)".equals(controller.warningsText()));
         assertTrue(controller.warningsTooltip().contains("without a commanded feed"));
@@ -152,7 +152,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
     // --- 3D preview integration ---------------------------------------------------------
 
     @Test
-    void previewIs3dAndSyncsBothDirections() throws Exception {
+    void previewIs3dAndSyncsBothDirections() {
         interact(() -> controller.loadText("G0 X10\nG1 X20 F600\n"));
         waitUntil(() -> controller.getPreview().segmentCount() == 2);
         assertEquals(2, controller.getPreview().renderedNodes(), "one cylinder per move");
