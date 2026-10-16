@@ -37,12 +37,14 @@ jobs:
       # the shaded jar, then the scanner publishes the analysis to SonarQube
       # Cloud. All Sonar configuration lives here — the pom stays clean.
       # SONAR_TOKEN is picked up from the environment by the scanner.
+      # -D args are quoted because PowerShell (the default Windows shell)
+      # otherwise mangles them — Maven then sees tokens like ".host.url=…".
       - name: Build, test and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >-
           mvn -B -ntp verify
           org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar
-          -Dsonar.organization=radixhomework
-          -Dsonar.projectKey=radixhomework_gcode-ide
-          -Dsonar.host.url=https://sonarcloud.io
+          "-Dsonar.organization=radixhomework"
+          "-Dsonar.projectKey=radixhomework_gcode-ide"
+          "-Dsonar.host.url=https://sonarcloud.io"
