@@ -1,4 +1,4 @@
-name: SonarQube Cloud analysis
+name: Build, test and quality
 
 on:
   push:
@@ -13,9 +13,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  analyze:
-    name: Compile and analyze
-    runs-on: ubuntu-latest
+  build-and-analyze:
+    name: Build, test and analyze
+    runs-on: windows-latest
     permissions:
       contents: read
     steps:
@@ -32,15 +32,16 @@ jobs:
           java-version: '25'
           cache: maven
 
-      # All SonarQube Cloud configuration lives here — the pom stays clean.
-      # Compilation is required for a meaningful Java analysis (the analyzer
-      # reads the compiled classes); no tests are run. SONAR_TOKEN is picked
-      # up from the environment by the scanner.
-      - name: Compile and analyze
+      # Windows runner (like the dev machine) so the TestFX view suites get a
+      # real display. `verify` builds, runs the full test suite and packages
+      # the shaded jar, then the scanner publishes the analysis to SonarQube
+      # Cloud. All Sonar configuration lives here — the pom stays clean.
+      # SONAR_TOKEN is picked up from the environment by the scanner.
+      - name: Build, test and analyze
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >-
-          mvn -B -ntp compile
+          mvn -B -ntp verify
           org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar
           -Dsonar.organization=radixhomework
           -Dsonar.projectKey=radixhomework_gcode-ide

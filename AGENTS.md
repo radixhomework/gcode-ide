@@ -39,11 +39,11 @@ Two gates apply:
 - **Local build**: `mvn test` passes (plain-JUnit model/service suites +
   TestFX view suites, currently 110+ tests), and `mvn -q package` builds the
   shaded jar.
-- **SonarQube Cloud**: `.github/workflows/sonarcloud.yml` compiles the
-  sources and scans on push to `main` and on PRs to
-  `main` (project `radixhomework_gcode-ide` at sonarcloud.io). All Sonar
-  configuration lives in that workflow file, not in the pom. Analysis is
-  CI-only: no tests run in it, and local builds never contact SonarCloud.
+- **SonarQube Cloud**: `.github/workflows/quality.yml` is the CI gate —
+  build, full test suite and scan on push to `main` and on PRs to `main`
+  (project `radixhomework_gcode-ide` at sonarcloud.io). All Sonar
+  configuration lives in that workflow file, not in the pom. Local builds
+  never contact SonarCloud.
 - For 3D/camera/rendering changes, verify with a rendered-PNG probe (see
   the probes in the git history) — transform math that passes unit tests
   has still rendered inverted on screen.
