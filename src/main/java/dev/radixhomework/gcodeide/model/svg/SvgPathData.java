@@ -46,7 +46,6 @@ public final class SvgPathData {
         }
     }
 
-    private static final Pattern LETTER = Pattern.compile("[A-Za-z]");
     private static final Pattern NUMBER =
             Pattern.compile("[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?");
 
