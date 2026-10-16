@@ -1,6 +1,7 @@
 package dev.radixhomework.gcodeide.model.parsing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -51,7 +52,7 @@ class GCodeParserTest {
         Move rapid = result.moves().get(0);
         Move cut = result.moves().get(1);
         assertEquals(MoveKind.RAPID, rapid.kind());
-        assertTrue(rapid.feed() == null);
+        assertNull(rapid.feed());
         assertEquals(MoveKind.CUT, cut.kind());
         assertEquals(600.0, cut.feed());
     }

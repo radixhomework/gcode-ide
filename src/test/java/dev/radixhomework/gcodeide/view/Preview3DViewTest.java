@@ -2,6 +2,7 @@ package dev.radixhomework.gcodeide.view;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -110,8 +111,8 @@ class Preview3DViewTest extends ApplicationTest {
         Move rapid = move(MoveKind.RAPID, 0, 0, 10, 0, 1);
         Move cut = move(MoveKind.CUT, 10, 0, 20, 0, 2);
         assertEquals(light.rapid(), Preview3DView.segmentColor(rapid, -2.0, light));
-        assertTrue(!Preview3DView.segmentColor(cut, -2.0, light)
-                .equals(Preview3DView.depthColor(-0.5, -2.0)),
+        assertNotEquals(Preview3DView.depthColor(-0.5, -2.0),
+                Preview3DView.segmentColor(cut, -2.0, light),
                 "depth ramp distinguishes depths");
         assertTrue(Preview3DView.depthColor(0, -2.0).getHue()
                 > Preview3DView.depthColor(-2, -2.0).getHue(),

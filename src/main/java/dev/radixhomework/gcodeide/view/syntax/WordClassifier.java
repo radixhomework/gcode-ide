@@ -59,25 +59,26 @@ public final class WordClassifier {
         while (matcher.find()) {
             String letter = matcher.group(1).toUpperCase();
             double value = Double.parseDouble(matcher.group(2));
-            String category;
-            if (letter.equals("G")) {
-                category = SUPPORTED_G_CODES.contains(asCode(value)) ? G_WORD : FALLBACK;
-            } else if (letter.equals("M")) {
-                category = SUPPORTED_M_CODES.contains(asCode(value)) ? M_WORD : FALLBACK;
-            } else if (letter.equals("N")) {
-                category = LINE_NUMBER;
-            } else if (AXIS_PARAM_LETTERS.contains(letter)) {
-                category = AXIS_PARAM;
-            } else {
-                category = FALLBACK;
-            }
-            spans.add(new Span(matcher.start(), matcher.end(), category));
+            spans.add(new Span(matcher.start(), matcher.end(), categoryFor(letter, value)));
         }
 
         if (commentStart >= 0) {
             spans.add(new Span(commentStart, text.length(), COMMENT));
         }
         return spans;
+    }
+
+    private static String categoryFor(String letter, double value) {
+        if (letter.equals("G")) {
+            return SUPPORTED_G_CODES.contains(asCode(value)) ? G_WORD : FALLBACK;
+        }
+        if (letter.equals("M")) {
+            return SUPPORTED_M_CODES.contains(asCode(value)) ? M_WORD : FALLBACK;
+        }
+        if (letter.equals("N")) {
+            return LINE_NUMBER;
+        }
+        return AXIS_PARAM_LETTERS.contains(letter) ? AXIS_PARAM : FALLBACK;
     }
 
     private static int asCode(double value) {

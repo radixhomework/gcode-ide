@@ -66,10 +66,32 @@ public class GCodeEditorView {
             hideDocumentation(); // text changed: any open documentation is stale
         });
         codeArea.caretPositionProperty().addListener((obs, oldPos, newPos) -> fireCaretMoved());
+        configureCompletionList();
+        configureDocumentationPopups();
+    }
 
+    /** Completion list appearance, acceptance, and its popup's styling. */
+    private void configureCompletionList() {
         suggestionList.getStyleClass().add("completion-list");
         suggestionList.setPrefSize(320, 170);
-        suggestionList.setCellFactory(list -> new javafx.scene.control.ListCell<>() {
+        suggestionList.setCellFactory(list -> suggestionCell());
+        suggestionList.setOnMouseClicked(event -> {
+            String chosen = suggestionList.getSelectionModel().getSelectedItem();
+            if (chosen != null) {
+                acceptSuggestion(chosen);
+            }
+        });
+        completionPopup.getContent().add(suggestionList);
+        completionPopup.setAutoHide(true);
+        // the popup renders in its own scene without a .root lookup chain;
+        // .tokens on the list gives app.css's variables a root there
+        suggestionList.getStyleClass().add(TOKENS_CLASS);
+        suggestionList.getStylesheets()
+                .add(getClass().getResource(APP_CSS).toExternalForm());
+    }
+
+    private javafx.scene.control.ListCell<String> suggestionCell() {
+        return new javafx.scene.control.ListCell<>() {
             private final javafx.scene.control.Label code =
                     new javafx.scene.control.Label();
             private final javafx.scene.control.Label desc =
@@ -95,21 +117,11 @@ public class GCodeEditorView {
                 desc.setText(cut < 0 ? "" : item.substring(cut + 3));
                 setGraphic(row);
             }
-        });
-        suggestionList.setOnMouseClicked(event -> {
-            String chosen = suggestionList.getSelectionModel().getSelectedItem();
-            if (chosen != null) {
-                acceptSuggestion(chosen);
-            }
-        });
-        completionPopup.getContent().add(suggestionList);
-        completionPopup.setAutoHide(true);
-        // the popup renders in its own scene without a .root lookup chain;
-        // .tokens on the list gives app.css's variables a root there
-        suggestionList.getStyleClass().add(TOKENS_CLASS);
-        suggestionList.getStylesheets()
-                .add(getClass().getResource(APP_CSS).toExternalForm());
+        };
+    }
 
+    /** Documentation popup content, hover timer, and its dismissal filters. */
+    private void configureDocumentationPopups() {
         docLabel.getStyleClass().add("doc-popup");
         var docPane = new StackPane(docLabel);
         docPane.getStyleClass().add(TOKENS_CLASS);
@@ -148,7 +160,9 @@ public class GCodeEditorView {
 
     private double hoverX;
     private double hoverY;
-    // anchor of the word the documentation popup is showing for (sticky popup)
+
+    /** Word the documentation popup is anchored to (sticky while the cursor
+     *  stays inside it). */
     private int anchorParagraph = -1;
     private int anchorStart = -1;
     private int anchorEnd = -1;
@@ -310,25 +324,35 @@ public class GCodeEditorView {
     /** The [start, end) range of the word (letter(s) plus trailing digits)
      *  at position {@code column}, or an empty array. */
     static int[] wordRangeAt(String paragraph, int column) {
-        int n = paragraph == null ? 0 : paragraph.length();
-        for (int idx : new int[] {column, column - 1}) {
-            int i = idx;
-            while (i >= 0 && i < n && Character.isDigit(paragraph.charAt(i))) {
-                i--; // digits never anchor a word: keep looking left for the letter
-            }
-            if (i >= 0 && i < n && Character.isLetter(paragraph.charAt(i))) {
-                int start = i;
-                while (start > 0 && Character.isLetter(paragraph.charAt(start - 1))) {
-                    start--;
-                }
-                int end = i + 1;
-                while (end < n && Character.isLetterOrDigit(paragraph.charAt(end))) {
-                    end++;
-                }
-                return new int[] {start, end};
-            }
+        if (paragraph == null) {
+            return new int[0];
         }
-        return new int[0];
+        int[] range = wordRangeAround(paragraph, column);
+        if (range == null) {
+            range = wordRangeAround(paragraph, column - 1);
+        }
+        return range != null ? range : new int[0];
+    }
+
+    /** The word range that contains {@code index}, looking left over digits. */
+    private static int[] wordRangeAround(String paragraph, int index) {
+        int n = paragraph.length();
+        int i = index;
+        while (i >= 0 && i < n && Character.isDigit(paragraph.charAt(i))) {
+            i--; // digits never anchor a word: keep looking left for the letter
+        }
+        if (i < 0 || i >= n || !Character.isLetter(paragraph.charAt(i))) {
+            return null;
+        }
+        int start = i;
+        while (start > 0 && Character.isLetter(paragraph.charAt(start - 1))) {
+            start--;
+        }
+        int end = i + 1;
+        while (end < n && Character.isLetterOrDigit(paragraph.charAt(end))) {
+            end++;
+        }
+        return new int[] {start, end};
     }
 
     /** The word at position {@code column}, or "". */

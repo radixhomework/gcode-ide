@@ -55,12 +55,13 @@ class MainWindowIntegrationTest extends ApplicationTest {
     // --- debounced live re-parse -----------------------------------------------
 
     @Test
-    void debounceUpdatesPreviewAndStatus() throws Exception {
+    void debounceUpdatesPreviewAndStatus() {
         interact(() -> controller.loadText("G0 X10\n"));
         waitUntil(() -> controller.getPreview().segmentCount() == 1);
         interact(() -> controller.getEditor().setText("G0 X10\nG1 X20 F600\n"));
         waitUntil(() -> controller.getPreview().segmentCount() == 2);
         waitUntil(() -> controller.statsText().contains("cut 10.0 mm"));
+        assertEquals(2, controller.getPreview().segmentCount());
     }
 
     @Test
@@ -244,7 +245,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
         List<String> persisted = new ArrayList<>();
         var dialog = new java.util.concurrent.atomic.AtomicReference<SettingsDialog>();
         interact(() -> dialog.set(dialogWithCloseFlag(closed,
-                name -> persisted.add(name))));
+                persisted::add)));
         interact(() -> dialog.get().themeComboForTest().getSelectionModel().select("Dracula"));
         interact(() -> dialog.get().buttonFor(javafx.scene.control.ButtonType.CANCEL).fire());
         // staged edit discarded: previous theme still active, nothing persisted
@@ -280,7 +281,7 @@ class MainWindowIntegrationTest extends ApplicationTest {
     // --- go-to-line (Edit > Go to Line..., Ctrl+G) ---------------------------------------
 
     @Test
-    void goToLineNavigatesAndIgnoresInvalid() throws Exception {
+    void goToLineNavigatesAndIgnoresInvalid() {
         StringBuilder text = new StringBuilder();
         for (int i = 0; i < 100; i++) {
             text.append("G1 X").append(i).append('\n');
@@ -451,13 +452,12 @@ class MainWindowIntegrationTest extends ApplicationTest {
 
     // -- helpers -----------------------------------------------------------------
 
-    private static void waitUntil(java.util.function.BooleanSupplier condition)
-            throws InterruptedException {
+    private void waitUntil(java.util.function.BooleanSupplier condition) {
         for (int i = 0; i < 200; i++) { // up to 10 s
             if (condition.getAsBoolean()) {
                 return;
             }
-            Thread.sleep(50);
+            sleep(50);
         }
         throw new AssertionError("condition not met in time");
     }

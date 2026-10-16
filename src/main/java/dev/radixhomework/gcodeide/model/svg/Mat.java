@@ -28,34 +28,43 @@ public record Mat(double a, double b, double c, double d, double e, double f) {
         String s = transform == null ? "" : transform;
         int i = 0;
         while (i < s.length()) {
-            if (!Character.isLetter(s.charAt(i)) && s.charAt(i) != '_') {
-                i++;
-                continue;
+            int nameEnd = nameEnd(s, i);
+            String op = nameEnd > i ? s.substring(i, nameEnd) : "";
+            int open = skipSpaces(s, nameEnd);
+            int close = open < s.length() && s.charAt(open) == '('
+                    ? s.indexOf(')', open) : -1;
+            if (!op.isEmpty() && close > open) {
+                result = result.multiply(parseOp(op, args(s, open, close)));
+                i = close + 1;
+            } else {
+                i = nameEnd > i ? nameEnd : i + 1;
             }
-            int nameStart = i;
-            while (i < s.length()
-                    && (Character.isLetterOrDigit(s.charAt(i)) || s.charAt(i) == '_')) {
-                i++;
-            }
-            String op = s.substring(nameStart, i);
-            while (i < s.length() && Character.isWhitespace(s.charAt(i))) {
-                i++;
-            }
-            if (i >= s.length() || s.charAt(i) != '(') {
-                continue; // word without an argument list: keep scanning
-            }
-            int close = s.indexOf(')', i);
-            if (close < 0) {
-                break;
-            }
-            double[] v = java.util.Arrays
-                    .stream(s.substring(i + 1, close).trim().split("[\\s,]+"))
-                    .mapToDouble(t -> t.isBlank() ? 0 : Double.parseDouble(t))
-                    .toArray();
-            result = result.multiply(parseOp(op, v));
-            i = close + 1;
         }
         return result;
+    }
+
+    /** End of a transform name starting at {@code from} (equal when none). */
+    private static int nameEnd(String s, int from) {
+        int i = from;
+        while (i < s.length()
+                && (Character.isLetterOrDigit(s.charAt(i)) || s.charAt(i) == '_')) {
+            i++;
+        }
+        return i;
+    }
+
+    private static int skipSpaces(String s, int from) {
+        int i = from;
+        while (i < s.length() && Character.isWhitespace(s.charAt(i))) {
+            i++;
+        }
+        return i;
+    }
+
+    private static double[] args(String s, int open, int close) {
+        return java.util.Arrays.stream(s.substring(open + 1, close).trim().split("[\\s,]+"))
+                .mapToDouble(t -> t.isBlank() ? 0 : Double.parseDouble(t))
+                .toArray();
     }
 
     private static Mat parseOp(String op, double[] v) {

@@ -12,6 +12,7 @@ import javafx.scene.AmbientLight;
 import javafx.scene.Group;
 import javafx.scene.PerspectiveCamera;
 import javafx.scene.SubScene;
+import javafx.event.Event;
 import javafx.scene.control.Label;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.PickResult;
@@ -21,9 +22,7 @@ import javafx.scene.paint.Color;
 import javafx.scene.paint.PhongMaterial;
 import javafx.scene.shape.Cylinder;
 import javafx.scene.shape.Shape3D;
-import javafx.scene.transform.Affine;
 import javafx.scene.transform.Rotate;
-import javafx.scene.transform.Translate;
 
 /**
  * THE toolpath preview: a 3D perspective view of the toolpath against the
@@ -51,6 +50,8 @@ public class Preview3DView {
     public static final double SEGMENT_RADIUS_MM = 0.12;
     /** Diagnostic: log every mouse event the SubScene receives (-Dgcodeide.eventlog=true). */
     private static final boolean EVENT_LOG = Boolean.getBoolean("gcodeide.eventlog");
+    private static final org.slf4j.Logger LOG =
+            org.slf4j.LoggerFactory.getLogger(Preview3DView.class);
     /** Drag of this many pixels pans by one camera-distance of world travel. */
     public static final double PAN_PIXELS_PER_DISTANCE = 300.0;
     private static final double SHALLOW_HUE = 210; // blue at Z0
@@ -117,12 +118,12 @@ public class Preview3DView {
         subScene.addEventFilter(MouseEvent.MOUSE_RELEASED, this::onReleased);
         subScene.addEventFilter(ScrollEvent.ANY, this::onScroll);
         subScene.addEventFilter(javafx.scene.input.ContextMenuEvent.CONTEXT_MENU_REQUESTED,
-                event -> event.consume()); // right button pans; no menu
+                Event::consume); // right button pans; no menu
         if (EVENT_LOG) {
-            subScene.addEventFilter(MouseEvent.ANY, event -> System.out.printf(
-                    "EVT %-28s button=%-9s primary=%-5s secondary=%-5s at %.0f,%.0f%n",
+            subScene.addEventFilter(MouseEvent.ANY, event -> LOG.info(String.format(
+                    "EVT %-28s button=%-9s primary=%-5s secondary=%-5s at %.0f,%.0f",
                     event.getEventType(), event.getButton(), event.isPrimaryButtonDown(),
-                    event.isSecondaryButtonDown(), event.getX(), event.getY()));
+                    event.isSecondaryButtonDown(), event.getX(), event.getY())));
         }
         fitCameraDistance();
 
@@ -160,7 +161,7 @@ public class Preview3DView {
     public static Color depthColor(double z, double deepestCutZ) {        if (deepestCutZ >= 0) {
             return Color.hsb(SHALLOW_HUE, 0.78, 0.71);
         }
-        double t = Math.max(0.0, Math.min(1.0, z / deepestCutZ));
+        double t = Math.clamp(z / deepestCutZ, 0.0, 1.0);
         return Color.hsb(SHALLOW_HUE + (DEEP_HUE - SHALLOW_HUE) * t, 0.78, 0.71);
     }
 
@@ -235,8 +236,10 @@ public class Preview3DView {
 
     /** Content bounds over all move endpoints (mm); a default frame when empty. */
     public static double[] contentBounds(List<Move> moves) {
-        double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
-        double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+        double minX = Double.POSITIVE_INFINITY;
+        double minY = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        double maxY = Double.NEGATIVE_INFINITY;
         for (Move move : moves) {
             minX = Math.min(minX, Math.min(move.start().x(), move.end().x()));
             minY = Math.min(minY, Math.min(move.start().y(), move.end().y()));
@@ -473,8 +476,8 @@ public class Preview3DView {
         } else if (pressButton == javafx.scene.input.MouseButton.PRIMARY
                 || event.isPrimaryButtonDown()) {
             yaw.setAngle(yaw.getAngle() - (event.getX() - pressPoint.getX()) * 0.4);
-            pitch.setAngle(Math.max(-89,
-                    Math.min(89, pitch.getAngle() + (event.getY() - pressPoint.getY()) * 0.4)));
+            pitch.setAngle(Math.clamp(
+                    pitch.getAngle() + (event.getY() - pressPoint.getY()) * 0.4, -89, 89));
             applyCamera();
         }
         pressPoint = new Point2D(event.getX(), event.getY());
@@ -512,7 +515,7 @@ public class Preview3DView {
     /** Wheel zoom: positive deltaY moves in, negative moves out. */
     public void dolly(double deltaY) {
         double factor = deltaY > 0 ? 0.9 : 1.0 / 0.9;
-        cameraDistance = Math.max(50, Math.min(5000, cameraDistance * factor));
+        cameraDistance = Math.clamp(cameraDistance * factor, 50, 5000);
         applyCamera();
     }
 

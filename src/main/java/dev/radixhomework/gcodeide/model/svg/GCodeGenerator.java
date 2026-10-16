@@ -43,55 +43,72 @@ public final class GCodeGenerator {
                 continue;
             }
             runIndex++;
-            double[][] mm = toMm(run, doc, options);
-            boolean closed = run.closed();
-            if (closed && options.cutSide() != CutSide.ON_LINE) {
-                double radius = options.cutterDiameterMm() / 2;
-                var ring = new ArrayList<double[]>();
-                for (double[] p : mm) {
-                    ring.add(p.clone());
-                }
-                var offset = PathOffsetter.offsetClosed(ring, radius,
-                        options.cutSide() == CutSide.OUTSIDE, SvgFlattener.TOLERANCE);
-                if (PathOffsetter.offsetIsValid(ring, offset,
-                        options.cutSide() == CutSide.OUTSIDE)) {
-                    mm = offset.toArray(new double[0][]);
-                } else {
-                    String warning = "run " + runIndex + ": " + options.cutSide()
-                            + " offset self-intersects (geometry too tight); cut on-line";
-                    warnings.add(warning);
-                    sb.append("(warning: ").append(warning).append(")\n");
-                }
-            } else if (!closed && options.cutSide() != CutSide.ON_LINE) {
-                String warning = "run " + runIndex + ": side offsets apply to closed"
-                        + " shapes only in this version; open path cut on-line";
-                warnings.add(warning);
-                sb.append("(warning: ").append(warning).append(")\n");
-            }
-            for (double depth = firstPassDepth(options);; depth -= options.depthPerPass()) {
-                if (depth < options.finalDepth()) {
-                    depth = options.finalDepth();
-                }
-                sb.append(String.format(java.util.Locale.ROOT, "G0 Z%.3f%n", options.safeZ()));
-                sb.append(String.format(java.util.Locale.ROOT, "G0 X%.3f Y%.3f%n", mm[0][0], mm[0][1]));
-                sb.append(String.format(java.util.Locale.ROOT, "G1 Z%.3f F%.0f%n", depth,
-                        options.cutFeed()));
-                for (int i = 1; i < mm.length; i++) {
-                    sb.append(String.format(java.util.Locale.ROOT, "G1 X%.3f Y%.3f%n",
-                            mm[i][0], mm[i][1]));
-                }
-                if (run.closed()) {
-                    sb.append(String.format(java.util.Locale.ROOT, "G1 X%.3f Y%.3f%n",
-                            mm[0][0], mm[0][1]));
-                }
-                if (depth <= options.finalDepth()) {
-                    break;
-                }
-            }
+            double[][] mm = applyCutSide(toMm(run, doc, options), run.closed(),
+                    options, runIndex, warnings, sb);
+            emitPasses(sb, mm, options, run.closed());
         }
         sb.append("G0 Z").append(String.format(java.util.Locale.ROOT, "%.3f", options.safeZ())).append('\n');
         sb.append("M5\n");
         return new GenerateResult(sb.toString(), warnings);
+    }
+
+    /** Applies the closed-shape side offset, or records why the run stays
+     *  on-line. Returns the (possibly offset) points to emit. */
+    private static double[][] applyCutSide(double[][] mm, boolean closed,
+            SvgImportOptions options, int runIndex, List<String> warnings,
+            StringBuilder sb) {
+        if (options.cutSide() == CutSide.ON_LINE) {
+            return mm;
+        }
+        if (!closed) {
+            String warning = "run " + runIndex + ": side offsets apply to closed"
+                    + " shapes only in this version; open path cut on-line";
+            warnings.add(warning);
+            sb.append("(warning: ").append(warning).append(")\n");
+            return mm;
+        }
+        double radius = options.cutterDiameterMm() / 2;
+        var ring = java.util.Arrays.stream(mm)
+                .map(double[]::clone)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        var offset = PathOffsetter.offsetClosed(ring, radius,
+                options.cutSide() == CutSide.OUTSIDE, SvgFlattener.TOLERANCE);
+        if (PathOffsetter.offsetIsValid(ring, offset,
+                options.cutSide() == CutSide.OUTSIDE)) {
+            return offset.toArray(new double[0][]);
+        }
+        String warning = "run " + runIndex + ": " + options.cutSide()
+                + " offset self-intersects (geometry too tight); cut on-line";
+        warnings.add(warning);
+        sb.append("(warning: ").append(warning).append(")\n");
+        return mm;
+    }
+
+    /** Emits the pass sequences until final depth is reached. */
+    private static void emitPasses(StringBuilder sb, double[][] mm,
+            SvgImportOptions options, boolean closed) {
+        double depth = firstPassDepth(options);
+        while (true) {
+            if (depth < options.finalDepth()) {
+                depth = options.finalDepth();
+            }
+            sb.append(String.format(java.util.Locale.ROOT, "G0 Z%.3f%n", options.safeZ()));
+            sb.append(String.format(java.util.Locale.ROOT, "G0 X%.3f Y%.3f%n", mm[0][0], mm[0][1]));
+            sb.append(String.format(java.util.Locale.ROOT, "G1 Z%.3f F%.0f%n", depth,
+                    options.cutFeed()));
+            for (int i = 1; i < mm.length; i++) {
+                sb.append(String.format(java.util.Locale.ROOT, "G1 X%.3f Y%.3f%n",
+                        mm[i][0], mm[i][1]));
+            }
+            if (closed) {
+                sb.append(String.format(java.util.Locale.ROOT, "G1 X%.3f Y%.3f%n",
+                        mm[0][0], mm[0][1]));
+            }
+            if (depth <= options.finalDepth()) {
+                break;
+            }
+            depth -= options.depthPerPass();
+        }
     }
 
     private static double firstPassDepth(SvgImportOptions options) {
@@ -130,8 +147,10 @@ public final class GCodeGenerator {
     }
 
     private static double[] contentBounds(SvgDocument doc) {
-        double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY;
-        double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY;
+        double minX = Double.POSITIVE_INFINITY;
+        double minY = Double.POSITIVE_INFINITY;
+        double maxX = Double.NEGATIVE_INFINITY;
+        double maxY = Double.NEGATIVE_INFINITY;
         for (SvgRun run : doc.runs()) {
             for (double[] p : run.points()) {
                 minX = Math.min(minX, p[0]);

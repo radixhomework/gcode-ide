@@ -111,45 +111,52 @@ public final class PathOffsetter {
                     - (cur[1] - prev[1]) * (next[0] - cur[0]);
 
             if (cross > 1e-9) {
-                // convex corner (CCW ring): round join, arc from right1 to
-                // right2 rotating clockwise (angle decreasing)
-                double a1 = Math.atan2(right1[1], right1[0]);
-                double a2 = Math.atan2(right2[1], right2[0]);
-                double sweep = a2 - a1;
-                while (sweep < 0) {
-                    sweep += 2 * Math.PI;
-                }
-                double stepAngle = r > tol
-                        ? 2 * Math.acos(Math.max(-1, 1 - tol / r))
-                        : Math.PI / 4;
-                int steps = Math.max(1, (int) Math.ceil(Math.abs(sweep)
-                        / Math.max(1e-6, stepAngle)));
-                for (int k = 0; k <= steps; k++) {
-                    double ang = a1 + sweep * k / steps;
-                    out.add(new double[] {cur[0] + r * Math.cos(ang),
-                            cur[1] + r * Math.sin(ang)});
-                }
+                addRoundJoin(out, cur, r, tol, right1, right2);
             } else {
                 // concave corner: the right-offset edges intersect at the miter
                 double[] p = lineIntersect(
-                        prev[0] + r * right1[0], prev[1] + r * right1[1],
-                        cur[0] + r * right1[0], cur[1] + r * right1[1],
-                        cur[0] + r * right2[0], cur[1] + r * right2[1],
-                        next[0] + r * right2[0], next[1] + r * right2[1]);
-                if (p != null) {
+                        offset(prev, right1, r), offset(cur, right1, r),
+                        offset(cur, right2, r), offset(next, right2, r));
+                if (p.length == 2) {
                     out.add(p);
                 } else {
-                    out.add(new double[] {cur[0] + r * right1[0],
-                            cur[1] + r * right1[1]});
+                    out.add(offset(cur, right1, r));
                 }
             }
         }
         return dedupe(out);
     }
 
+    /** Point moved by r along the unit normal. */
+    private static double[] offset(double[] p, double[] n, double r) {
+        return new double[] {p[0] + r * n[0], p[1] + r * n[1]};
+    }
+
+    /** Convex corner (CCW ring): round join, arc from right1 to right2
+     *  rotating clockwise (angle decreasing). */
+    private static void addRoundJoin(List<double[]> out, double[] cur, double r,
+            double tol, double[] right1, double[] right2) {
+        double a1 = Math.atan2(right1[1], right1[0]);
+        double a2 = Math.atan2(right2[1], right2[0]);
+        double sweep = a2 - a1;
+        while (sweep < 0) {
+            sweep += 2 * Math.PI;
+        }
+        double stepAngle = r > tol
+                ? 2 * Math.acos(Math.max(-1, 1 - tol / r))
+                : Math.PI / 4;
+        int steps = Math.max(1, (int) Math.ceil(Math.abs(sweep)
+                / Math.max(1e-6, stepAngle)));
+        for (int k = 0; k <= steps; k++) {
+            double ang = a1 + sweep * k / steps;
+            out.add(offset(cur, new double[] {Math.cos(ang), Math.sin(ang)}, r));
+        }
+    }
+
     /** Right-of-travel unit normal of the segment from -> to. */
     private static double[] rightNormal(double[] from, double[] to) {
-        double dx = to[0] - from[0], dy = to[1] - from[1];
+        double dx = to[0] - from[0];
+        double dy = to[1] - from[1];
         double len = Math.hypot(dx, dy);
         if (len < 1e-12) {
             return new double[] {0, 0};
@@ -157,14 +164,17 @@ public final class PathOffsetter {
         return new double[] {dy / len, -dx / len};
     }
 
-    private static double[] lineIntersect(double x1, double y1, double x2, double y2,
-            double x3, double y3, double x4, double y4) {
-        double den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    /** Intersection of segments a1→a2 and b1→b2, or an empty array when parallel. */
+    private static double[] lineIntersect(double[] a1, double[] a2,
+            double[] b1, double[] b2) {
+        double den = (a1[0] - a2[0]) * (b1[1] - b2[1])
+                - (a1[1] - a2[1]) * (b1[0] - b2[0]);
         if (Math.abs(den) < 1e-12) {
-            return null;
+            return new double[0];
         }
-        double t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
-        return new double[] {x1 + t * (x2 - x1), y1 + t * (y2 - y1)};
+        double t = ((a1[0] - b1[0]) * (b1[1] - b2[1])
+                - (a1[1] - b1[1]) * (b1[0] - b2[0])) / den;
+        return new double[] {a1[0] + t * (a2[0] - a1[0]), a1[1] + t * (a2[1] - a1[1])};
     }
 
     private static boolean segmentsIntersect(double[] p1, double[] p2,
@@ -182,14 +192,12 @@ public final class PathOffsetter {
     }
 
     private static List<double[]> dedupe(List<double[]> pts) {
-        List<double[]> out = new ArrayList<>();
-        for (double[] p : pts) {
-            if (out.isEmpty()
-                    || Math.hypot(p[0] - out.get(out.size() - 1)[0],
-                            p[1] - out.get(out.size() - 1)[1]) > 1e-9) {
-                out.add(p);
-            }
-        }
+        List<double[]> out = java.util.stream.IntStream.range(0, pts.size())
+                .filter(k -> k == 0
+                        || Math.hypot(pts.get(k)[0] - pts.get(k - 1)[0],
+                                pts.get(k)[1] - pts.get(k - 1)[1]) > 1e-9)
+                .mapToObj(pts::get)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         if (out.size() >= 2 && Math.hypot(
                 out.get(0)[0] - out.get(out.size() - 1)[0],
                 out.get(0)[1] - out.get(out.size() - 1)[1]) < 1e-9) {

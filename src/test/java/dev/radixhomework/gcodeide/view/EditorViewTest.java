@@ -265,9 +265,9 @@ class EditorViewTest extends ApplicationTest {
                 false, false, false, false, false, false, false, false, false, false, null);
     }
 
-    private void waitUntilShowing() throws InterruptedException {
+    private void waitUntilShowing() {
         for (int i = 0; i < 40 && !editor.isDocPopupShowing(); i++) {
-            Thread.sleep(25);
+            sleep(25);
         }
         assertTrue(editor.isDocPopupShowing(), "doc popup appears");
     }
@@ -293,7 +293,7 @@ class EditorViewTest extends ApplicationTest {
     }
 
     @Test
-    void hoverShowsDocumentationAfterDelay() throws Exception {
+    void hoverShowsDocumentationAfterDelay() {
         editor.setHoverDocDelayMillis(60);
         interact(() -> editor.setText("G2 X10\n"));
         var bounds = new java.util.concurrent.atomic.AtomicReference<javafx.geometry.Bounds>();
@@ -310,7 +310,7 @@ class EditorViewTest extends ApplicationTest {
                         false, false, false, false, false, false, false, false, false, false,
                         null)));
         for (int i = 0; i < 40 && !editor.isDocPopupShowing(); i++) {
-            Thread.sleep(25);
+            sleep(25);
         }
         assertTrue(editor.isDocPopupShowing(), "doc popup appears after the hover delay");
         assertTrue(editor.docPopupText().startsWith("G2 — "));

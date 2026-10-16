@@ -62,13 +62,11 @@ public final class Diagnostics {
 
     /** Dialect warnings: cut moves without a commanded feed, with source lines. */
     public static List<ToolpathWarning> computeWarnings(ParseResult result) {
-        List<Integer> missingFeedLines = new ArrayList<>();
-        for (Move move : result.moves()) {
-            if (move.kind() == MoveKind.CUT && move.feed() == null
-                    && !missingFeedLines.contains(move.line())) {
-                missingFeedLines.add(move.line());
-            }
-        }
+        List<Integer> missingFeedLines = result.moves().stream()
+                .filter(move -> move.kind() == MoveKind.CUT && move.feed() == null)
+                .map(Move::line)
+                .distinct()
+                .toList();
 
         List<ToolpathWarning> warnings = new ArrayList<>();
         if (!missingFeedLines.isEmpty()) {

@@ -2,7 +2,6 @@ package dev.radixhomework.gcodeide.model.preview;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.radixhomework.gcodeide.model.parsing.GCodeParser;
 import dev.radixhomework.gcodeide.model.parsing.Move;

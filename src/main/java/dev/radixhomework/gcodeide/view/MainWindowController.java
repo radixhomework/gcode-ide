@@ -368,7 +368,7 @@ public class MainWindowController {
             if (line >= 1) {
                 editor.gotoLine(line);
             }
-        } catch (NumberFormatException ignored) {
+        } catch (NumberFormatException _) {
             // empty or non-numeric input: caret unchanged
         }
     }

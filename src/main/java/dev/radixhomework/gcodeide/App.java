@@ -25,7 +25,6 @@ public class App extends Application {
     private static final String GCODE_FILTER = "G-code files (*.nc, *.gcode, *.ngc, *.tap)";
 
     private ConfigService configService;
-    private MainWindowController controller;
 
     public static void main(String[] args) {
         if (handleVersionArg(args)) {
@@ -59,7 +58,7 @@ public class App extends Application {
                         return path;
                     });
         };
-        controller = MainWindowController.create(openChooser, suggested -> {
+        var controller = MainWindowController.create(openChooser, suggested -> {
             FileChooser dialog = newFileChooser("Save G-code as", GCODE_FILTER,
                     "*.nc", "*.gcode", "*.ngc", "*.tap");
             dialog.setInitialFileName(suggested);

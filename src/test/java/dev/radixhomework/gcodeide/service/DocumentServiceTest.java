@@ -73,7 +73,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void discardPromptProceeds(@TempDir Path dir) {
+    void discardPromptProceeds() {
         DocumentService service = new DocumentService(name -> SaveDecision.DISCARD,
                 suggested -> Optional.empty());
         service.markModified();

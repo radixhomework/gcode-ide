@@ -127,35 +127,12 @@ public final class GCodeParser {
                 String letter = word.letter();
                 double value = word.value();
                 switch (letter) {
-                    case "G" -> {
-                        int code = value == (int) value ? (int) value : -1;
-                        switch (code) {
-                            case 0, 1, 2, 3 -> motionWord = code;
-                            case 90 -> absolute = true;
-                            case 91 -> absolute = false;
-                            case 20 -> inches = true;
-                            case 21 -> inches = false;
-                            case 17 -> { /* XY plane: the plane the model works in */ }
-                            default -> diag(lineno, Severity.INFO,
-                                    "unsupported code " + fmtCode("G", value) + " ignored");
-                        }
-                    }
-                    case "M" -> {
-                        if (value == 3) {
-                            spindle = Spindle.CW;
-                        } else if (value == 4) {
-                            spindle = Spindle.CCW;
-                        } else if (value == 5) {
-                            spindle = Spindle.OFF;
-                        } else {
-                            diag(lineno, Severity.INFO,
-                                    "unsupported code " + fmtCode("M", value) + " ignored");
-                        }
-                    }
+                    case "G" -> motionWord = gCode(lineno, value);
+                    case "M" -> mCode(lineno, value);
                     case "N" -> { /* line number, consumed */ }
                     case "X", "Y", "Z", "I", "J", "R", "F", "S" -> params.put(letter, value);
                     default -> diag(lineno, Severity.INFO,
-                            "unsupported word " + fmtCode(letter, value) + " ignored");
+                            "unsupported word " + fmtCode(letter, value) + IGNORED);
                 }
             }
 
@@ -165,7 +142,41 @@ public final class GCodeParser {
             if (motionWord != null) {
                 motion = motionWord;
             }
+            applyMotion(lineno, params);
+        }
 
+        /** Applies a G word's modal effect; returns a new motion word or null. */
+        private Integer gCode(int lineno, double value) {
+            int code = value == (int) value ? (int) value : -1;
+            switch (code) {
+                case 0, 1, 2, 3 -> {
+                    return code;
+                }
+                case 90 -> absolute = true;
+                case 91 -> absolute = false;
+                case 20 -> inches = true;
+                case 21 -> inches = false;
+                case 17 -> { /* XY plane: the plane the model works in */ }
+                default -> diag(lineno, Severity.INFO,
+                        "unsupported code " + fmtCode("G", value) + IGNORED);
+            }
+            return null;
+        }
+
+        private void mCode(int lineno, double value) {
+            if (value == 3) {
+                spindle = Spindle.CW;
+            } else if (value == 4) {
+                spindle = Spindle.CCW;
+            } else if (value == 5) {
+                spindle = Spindle.OFF;
+            } else {
+                diag(lineno, Severity.INFO,
+                        "unsupported code " + fmtCode("M", value) + IGNORED);
+            }
+        }
+
+        private void applyMotion(int lineno, Map<String, Double> params) {
             boolean hasAxis = params.containsKey("X") || params.containsKey("Y")
                     || params.containsKey("Z");
             boolean hasArcData = params.containsKey("I") || params.containsKey("J")
@@ -193,25 +204,10 @@ public final class GCodeParser {
             Position end = target(params);
             boolean clockwise = motion == 2;
 
-            Position center;
-            if (params.containsKey("R")) {
-                double signedRadius = mm(params.get("R"));
-                center = centerFromRadius(start, end, signedRadius, clockwise);
-                if (center == null) {
-                    diag(lineno, Severity.WARNING, String.format(
-                            "arc skipped: R %.6g too small for the given endpoints",
-                            Math.abs(signedRadius)));
-                    return;
-                }
-            } else if (params.containsKey("I") || params.containsKey("J")) {
-                double i = mm(params.getOrDefault("I", 0.0));
-                double j = mm(params.getOrDefault("J", 0.0));
-                center = new Position(start.x() + i, start.y() + j, 0);
-            } else {
-                diag(lineno, Severity.WARNING, "arc skipped: neither I/J offsets nor R radius given");
+            Position center = arcCenter(lineno, params, start, end, clockwise);
+            if (center == null) {
                 return;
             }
-
             double radius = Math.hypot(start.x() - center.x(), start.y() - center.y());
             if (radius < EPS) {
                 diag(lineno, Severity.WARNING, "arc skipped: zero radius");
@@ -224,12 +220,39 @@ public final class GCodeParser {
                     && Math.abs(end.x() - start.x()) < EPS
                     && Math.abs(end.y() - start.y()) < EPS
                     && Math.abs(end.z() - start.z()) < EPS;
-            if (fullCircle) {
-                sweep = clockwise ? -TWO_PI : TWO_PI;
-            } else if (Math.abs(sweep) < EPS) {
-                sweep = clockwise ? -TWO_PI : TWO_PI; // degenerate: force a path
+            if (fullCircle || Math.abs(sweep) < EPS) {
+                sweep = clockwise ? -TWO_PI : TWO_PI; // full circle or degenerate: force a path
             }
 
+            emitArcSegments(lineno, start, end, center, radius, startAngle, sweep);
+            pos = end;
+        }
+
+        /** Center from R or I/J data; null (with a warning) when unusable. */
+        private Position arcCenter(int lineno, Map<String, Double> params,
+                Position start, Position end, boolean clockwise) {
+            if (params.containsKey("R")) {
+                double signedRadius = mm(params.get("R"));
+                Position center = centerFromRadius(start, end, signedRadius, clockwise);
+                if (center == null) {
+                    diag(lineno, Severity.WARNING, String.format(
+                            "arc skipped: R %.6g too small for the given endpoints",
+                            Math.abs(signedRadius)));
+                }
+                return center;
+            }
+            if (params.containsKey("I") || params.containsKey("J")) {
+                double i = mm(params.getOrDefault("I", 0.0));
+                double j = mm(params.getOrDefault("J", 0.0));
+                return new Position(start.x() + i, start.y() + j, 0);
+            }
+            diag(lineno, Severity.WARNING,
+                    "arc skipped: neither I/J offsets nor R radius given");
+            return null;
+        }
+
+        private void emitArcSegments(int lineno, Position start, Position end,
+                Position center, double radius, double startAngle, double sweep) {
             int segments = segmentCount(radius, Math.abs(sweep));
             Position previous = start;
             for (int i = 1; i <= segments; i++) {
@@ -246,17 +269,21 @@ public final class GCodeParser {
                 moves.add(new Move(MoveKind.CUT, previous, point, lineno, feed, true, spindle));
                 previous = point;
             }
-            pos = end;
         }
 
         private Position target(Map<String, Double> params) {
-            double x = params.containsKey("X") ? mm(params.get("X")) : absolute ? pos.x() : 0.0;
-            double y = params.containsKey("Y") ? mm(params.get("Y")) : absolute ? pos.y() : 0.0;
-            double z = params.containsKey("Z") ? mm(params.get("Z")) : absolute ? pos.z() : 0.0;
+            double x = axis(params, "X", absolute ? pos.x() : 0.0);
+            double y = axis(params, "Y", absolute ? pos.y() : 0.0);
+            double z = axis(params, "Z", absolute ? pos.z() : 0.0);
             if (absolute) {
                 return new Position(x, y, z);
             }
             return new Position(pos.x() + x, pos.y() + y, pos.z() + z);
+        }
+
+        /** The mm-scaled parameter, or the (already absolute-resolved) fallback. */
+        private double axis(Map<String, Double> params, String letter, double fallback) {
+            return params.containsKey(letter) ? mm(params.get(letter)) : fallback;
         }
 
         private double sweep(Position start, Position end, Position center, boolean clockwise) {
@@ -295,7 +322,7 @@ public final class GCodeParser {
         }
 
         private int segmentCount(double radius, double sweep) {
-            double ratio = Math.max(-1.0, Math.min(1.0, 1.0 - tol / radius));
+            double ratio = Math.clamp(1.0 - tol / radius, -1.0, 1.0);
             double maxStep = 2.0 * Math.acos(ratio);
             if (maxStep <= EPS) {
                 return 1;
@@ -307,14 +334,16 @@ public final class GCodeParser {
             return inches ? value * INCH_TO_MM : value;
         }
 
+        private static final String IGNORED = " ignored";
+
         private void diag(int line, Severity severity, String message) {
             diagnostics.add(new Diagnostic(line, severity, message));
         }
-    }
 
-    private static String fmtCode(String letter, double value) {
-        return letter + (value == (long) value
-                ? String.valueOf((long) value)
-                : String.valueOf(value));
+        private static String fmtCode(String letter, double value) {
+            return letter + (value == (long) value
+                    ? String.valueOf((long) value)
+                    : String.valueOf(value));
+        }
     }
 }
