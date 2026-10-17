@@ -81,6 +81,41 @@ class SvgFlattenerTest {
     }
 
     @Test
+    void smoothCubicReflectsThePreviousControlPoint() {
+        var runs = SvgFlattener.flatten(
+                SvgPathData.parse("M 0 0 C 40 100 80 -100 120 0 S 160 100 200 0"));
+        var pts = runs.get(0).points();
+        assertTrue(pts.size() > 4, "both curves flattened to multiple segments");
+        assertEquals(200.0, pts.get(pts.size() - 1)[0], 0.01);
+        assertEquals(0.0, pts.get(pts.size() - 1)[1], 0.01);
+    }
+
+    @Test
+    void smoothQuadReflectsThePreviousControlPoint() {
+        var runs = SvgFlattener.flatten(SvgPathData.parse("M 0 0 Q 20 40 40 0 T 80 0"));
+        var pts = runs.get(0).points();
+        assertTrue(pts.size() > 3, "both curves flattened to multiple segments");
+        assertEquals(80.0, pts.get(pts.size() - 1)[0], 0.01);
+        assertEquals(0.0, pts.get(pts.size() - 1)[1], 0.01);
+    }
+
+    @Test
+    void hVRelativeAndMixedCommandsResolve() {
+        var runs = SvgFlattener.flatten(
+                SvgPathData.parse("M 10 10 h 20 v 10 H 5 V 0 l 5 5 L 20 20 Z"));
+        var pts = runs.get(0).points();
+        // M(10,10) h(30,10) v(30,20) H(5,20) V(5,0) l(10,5) L(20,20) Z(10,10)
+        assertEquals(8, pts.size());
+        assertEquals(30.0, pts.get(1)[0], 1e-9);
+        assertEquals(20.0, pts.get(2)[1], 1e-9);
+        assertEquals(5.0, pts.get(3)[0], 1e-9);
+        assertEquals(0.0, pts.get(4)[1], 1e-9);
+        assertEquals(10.0, pts.get(5)[0], 1e-9);
+        assertEquals(10.0, pts.get(7)[0], 1e-9);
+        assertTrue(runs.get(0).closed());
+    }
+
+    @Test
     void arcLargeSweepGoesTheLongWay() {
         var short_ = SvgFlattener.flatten(SvgPathData.parse("M 0 0 A 50 50 0 0 1 50 50"));
         var long_ = SvgFlattener.flatten(SvgPathData.parse("M 0 0 A 50 50 0 1 1 50 50"));

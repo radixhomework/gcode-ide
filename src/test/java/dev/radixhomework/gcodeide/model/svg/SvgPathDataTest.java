@@ -19,13 +19,13 @@ class SvgPathDataTest {
         assertEquals('M', cmds.get(0).letter());
         assertEquals(2, cmds.get(0).args().length);
         assertEquals(6, cmds.get(4).args().length); // C
-        assertEquals(7, cmds.get(9).args().length); // A
-        // "S 7 8 9 10" is two implicit S commands (SVG implicit repeat)
-        assertEquals(2, cmds.get(5).args().length);
-        assertEquals(2, cmds.get(6).args().length);
+        assertEquals(7, cmds.get(8).args().length); // A
+        // "S 7 8 9 10" is one S command: four parameters (x2 y2 x y)
+        assertEquals('S', cmds.get(5).letter());
+        assertEquals(4, cmds.get(5).args().length);
         assertEquals('Z', cmds.get(cmds.size() - 1).letter());
         assertTrue(cmds.stream().noneMatch(SvgPathData.Cmd::relative));
-        assertEquals(11, cmds.size()); // S repeats implicitly: M L H V C S S Q T A Z
+        assertEquals(10, cmds.size()); // M L H V C S Q T A Z
     }
 
     @Test

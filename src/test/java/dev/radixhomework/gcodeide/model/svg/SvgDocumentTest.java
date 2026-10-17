@@ -123,4 +123,51 @@ class SvgDocumentTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
                 () -> SvgDocument.load(svg));
     }
+
+    @Test
+    void unsupportedTransformWarnsAndGeometryStillImports() {
+        SvgDocument doc = SvgDocument.load("""
+                <svg width="10" height="10">
+                  <rect width="5" height="5" transform="skewX(30)"/>
+                </svg>""");
+        assertEquals(1, doc.runs().size());
+        assertTrue(doc.warnings().stream().anyMatch(w -> w.contains("transform")),
+                "unsupported transform warned");
+    }
+
+    @Test
+    void degenerateShapesProduceNoRuns() {
+        SvgDocument doc = SvgDocument.load("""
+                <svg width="10" height="10">
+                  <rect width="0" height="5"/>
+                  <circle r="0"/>
+                  <ellipse rx="-1" ry="5"/>
+                </svg>""");
+        assertTrue(doc.runs().isEmpty());
+        assertTrue(doc.warnings().stream().anyMatch(w -> w.contains("no shape geometry")),
+                "hint warning present");
+    }
+
+    @Test
+    void polylineAndPolygonImportOpenAndClosed() {
+        SvgDocument doc = SvgDocument.load("""
+                <svg width="100" height="100">
+                  <polyline points="0,0 10,10 20,0"/>
+                  <polygon points="0,0 10,10 20,0"/>
+                </svg>""");
+        assertEquals(2, doc.runs().size());
+        assertTrue(!doc.runs().get(0).closed(), "polyline stays open");
+        assertTrue(doc.runs().get(1).closed(), "polygon is closed");
+    }
+
+    @Test
+    void unitSuffixesAndBrokenViewBoxAreTolerated() {
+        SvgDocument doc = SvgDocument.load("""
+                <svg width="10px" height="10mm" viewBox="garbage">
+                  <rect width="5" height="5"/>
+                </svg>""");
+        assertEquals(1, doc.runs().size());
+        assertEquals(10.0, doc.width());
+        assertEquals(10.0, doc.height());
+    }
 }

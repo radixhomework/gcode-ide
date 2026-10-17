@@ -51,7 +51,7 @@ public final class SvgPathData {
 
     private static final Map<Character, Integer> ARGS = Map.of(
             'M', 2, 'L', 2, 'H', 1, 'V', 1,
-            'C', 6, 'S', 2, 'Q', 4, 'T', 2,
+            'C', 6, 'S', 4, 'Q', 4, 'T', 2,
             'A', 7, 'Z', 0);
 
     private SvgPathData() {

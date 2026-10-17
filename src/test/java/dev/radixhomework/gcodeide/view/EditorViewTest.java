@@ -266,7 +266,9 @@ class EditorViewTest extends ApplicationTest {
     }
 
     private void waitUntilShowing() {
-        for (int i = 0; i < 40 && !editor.isDocPopupShowing(); i++) {
+        // generous budget: the full suite boots several applications in one
+        // JVM and the FX thread can be busy when a popup timer starts
+        for (int i = 0; i < 80 && !editor.isDocPopupShowing(); i++) {
             sleep(25);
         }
         assertTrue(editor.isDocPopupShowing(), "doc popup appears");

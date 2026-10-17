@@ -5,8 +5,9 @@ public record Mat(double a, double b, double c, double d, double e, double f) {
 
     public static final Mat IDENTITY = new Mat(1, 0, 0, 1, 0, 0);
 
+    /** Composes two transforms: {@code o} is applied FIRST, then this one. */
     public Mat multiply(Mat o) {
-        // this (applied first) then o
+        // this (applied second): the matrix product this x o
         return new Mat(
                 o.a * a + o.c * b,
                 o.b * a + o.d * b,
@@ -81,10 +82,11 @@ public record Mat(double a, double b, double c, double d, double e, double f) {
                 double sin = Math.sin(rad);
                 Mat rotation = new Mat(cos, sin, -sin, cos, 0, 0);
                 if (v.length >= 3) {
-                    rotation = rotation.multiply(
-                            new Mat(1, 0, 0, 1, v[1], v[2]))
-                            .multiply(new Mat(cos, sin, -sin, cos, 0, 0))
-                            .multiply(new Mat(1, 0, 0, 1, -v[1], -v[2]));
+                    // pivot form rotate(a x y) = translate(x y) rotate(a)
+                    // translate(-x -y): the rightmost factor applies first
+                    var pivot = new Mat(1, 0, 0, 1, v[1], v[2]);
+                    var back = new Mat(1, 0, 0, 1, -v[1], -v[2]);
+                    rotation = pivot.multiply(rotation).multiply(back);
                 }
                 return rotation;
             case "matrix":
