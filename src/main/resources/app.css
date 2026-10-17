@@ -1,0 +1,186 @@
+/* G-Code IDE design tokens and shared component classes.
+   Tokens are looked-up colors: `.root` covers the main scene, `.tokens`
+   marks wrapper panes inside Popup windows (separate scenes) so they get
+   their own lookup root. `.context-menu` is included because menus render
+   in their own popup window too.
+   The -gd-* tokens resolve to AtlantaFX's palette variables, so every
+   styled surface follows the selected theme (light/dark) automatically. */
+
+.root, .tokens, .context-menu {
+    -gd-surface: -color-bg-default;
+    -gd-surface-alt: -color-bg-subtle;
+    -gd-border: -color-border-default;
+    -gd-text: -color-fg-default;
+    -gd-text-muted: -color-fg-muted;
+    -gd-accent: -color-accent-fg;
+    -gd-highlight: #ff8c00;
+    -gd-error: -color-danger-fg;
+    -gd-warn: -color-warning-fg;
+    -gd-warn-bg: -color-warning-subtle;
+    -gd-caret-line: -color-accent-subtle;
+    -gd-viewport: -color-bg-inset;
+}
+
+/* ---- theme-adaptive syntax palettes (editor) ---------------------------
+   Light palette (default) and the .dark overrides. editor.css consumes
+   these variables; WordClassifier categories map 1:1. */
+
+.root, .tokens, .context-menu {
+    -gd-syn-comment: #008000;
+    -gd-syn-g-word: #0000c0;
+    -gd-syn-m-word: #c00000;
+    -gd-syn-axis: #b05000;
+    -gd-syn-line-number: #6b7280;
+    -gd-syn-fallback: #909090;
+}
+
+.dark {
+    -gd-syn-comment: #8b949e;
+    -gd-syn-g-word: #79c0ff;
+    -gd-syn-m-word: #ff7b72;
+    -gd-syn-axis: #d2a8ff;
+    -gd-syn-line-number: #6e7681;
+    -gd-syn-fallback: #8b949e;
+}
+
+/* ---- menu bar: flat, like modern desktop tools ------------------------ */
+
+.menu-bar {
+    -fx-background-color: -gd-surface-alt;
+    -fx-border-color: transparent transparent -gd-border transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 0 4;
+}
+
+.menu-bar .menu {
+    -fx-background-color: transparent;
+    -fx-padding: 5 10 5 10;
+    -fx-background-radius: 0;
+}
+
+.menu-bar .menu:hover,
+.menu-bar .menu:showing,
+.menu-bar .menu:focused {
+    -fx-background-color: -gd-caret-line;
+    -fx-background-radius: 3;
+}
+
+.menu-bar .menu .label {
+    -fx-text-fill: -gd-text;
+}
+
+.context-menu {
+    -fx-background-color: -gd-surface;
+    -fx-border-color: -gd-border;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-padding: 4;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.12), 10, 0.2, 0, 3);
+}
+
+.menu-item {
+    -fx-background-radius: 3;
+    -fx-padding: 5 12 5 12;
+}
+
+.menu-item:hover,
+.menu-item:focused {
+    -fx-background-color: -gd-caret-line;
+}
+
+.menu-item .label {
+    -fx-text-fill: -gd-text;
+}
+
+.menu-item .accelerator-text {
+    -fx-text-fill: -gd-text-muted;
+}
+
+.menu-item:focused .label,
+.menu-item:hover .label {
+    -fx-text-fill: -gd-text;
+}
+
+.separator .line {
+    -fx-border-color: -gd-border;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 2 0 2 0;
+}
+
+/* ---- status bar ------------------------------------------------------ */
+
+.status-bar {
+    -fx-background-color: -gd-surface-alt;
+    -fx-border-color: transparent transparent -gd-border transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 6 12 6 12;
+    -fx-spacing: 14;
+}
+
+.status-text {
+    -fx-text-fill: -gd-text-muted;
+    -fx-font-size: 12px;
+}
+
+.warning-chip {
+    -fx-background-color: -gd-warn-bg;
+    -fx-text-fill: -gd-warn;
+    -fx-padding: 2 8 2 8;
+    -fx-background-radius: 3;
+    -fx-font-size: 12px;
+    -fx-font-weight: bold;
+}
+
+/* ---- popovers (shared language) --------------------------------------- */
+
+.doc-popup {
+    -fx-background-color: -gd-surface;
+    -fx-border-color: -gd-border;
+    -fx-padding: 5 10 5 10;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-text-fill: -gd-text;
+    -fx-font-size: 12px;
+}
+
+.stale-badge {
+    -fx-background-color: -gd-warn-bg;
+    -fx-text-fill: -gd-warn;
+    -fx-font-weight: bold;
+    -fx-padding: 3 10 3 10;
+    -fx-background-radius: 3;
+    -fx-font-size: 12px;
+}
+
+.completion-list {
+    -fx-background-color: -gd-surface;
+    -fx-border-color: -gd-border;
+    -fx-background-radius: 4;
+    -fx-border-radius: 4;
+    -fx-padding: 3;
+}
+
+.completion-list .list-cell {
+    -fx-background-insets: 0;
+    -fx-padding: 4 10 4 10;
+}
+
+.completion-list .list-cell:filled:selected {
+    -fx-background-color: -gd-caret-line;
+}
+
+.completion-code {
+    -fx-font-weight: bold;
+    -fx-text-fill: -gd-text;
+}
+
+.completion-desc {
+    -fx-text-fill: -gd-text-muted;
+}
+
+/* ---- settings window --------------------------------------------------- */
+
+.restart-note {
+    -fx-text-fill: -gd-text-muted;
+    -fx-font-size: 11px;
+}

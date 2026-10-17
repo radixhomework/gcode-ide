@@ -1,0 +1,11 @@
+# Generic example machine profile (millimeters, mm/min) - an example, not a
+# target: replace the values with your machine's real envelope and limits.
+name: Example Mill
+bed:
+  x: 300.0
+  y: 180.0
+  z: 45.0
+feeds:
+  max_cut: 800.0
+  max_rapid: 1000.0
+safe_z: 5.0

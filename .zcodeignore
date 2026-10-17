@@ -1,0 +1,38 @@
+target/
+dist-java/
+dependency-reduced-pom.xml
+.idea/
+*.iml
+.vscode/
+.zcode/
+# ===== everything above is synced from .gitignore (the "Sync from .gitignore" action rewrites only this section) =====
+.git/
+.hg/
+.svn/
+node_modules/
+bower_components/
+jspm_packages/
+__pycache__/
+site-packages/
+venv/
+coverage/
+htmlcov/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+cdk.out/
+*.egg-info/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- everything above this line: ZCode's default exclusion rules (custom rules below survive sync and restore) -----
+# custom rules go below (this hint line can be deleted)

@@ -1,0 +1,136 @@
+package dev.radixhomework.gcodeide.model.svg;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class SvgFlattenerTest {
+
+    @Test
+    void lineProducesTwoPointRun() {
+        var runs = SvgFlattener.flatten(SvgPathData.parse("M 0 0 L 30 0"));
+        assertEquals(1, runs.size());
+        assertEquals(2, runs.get(0).points().size());
+        assertTrue(!runs.get(0).closed());
+    }
+
+    @Test
+    void closedShapeEndsAtItsStartPoint() {
+        var runs = SvgFlattener.flatten(SvgPathData.parse("M 0 0 L 10 0 L 10 10 Z"));
+        assertEquals(1, runs.size());
+        assertTrue(runs.get(0).closed());
+        var pts = runs.get(0).points();
+        assertEquals(pts.get(0)[0], pts.get(pts.size() - 1)[0], 1e-9);
+        assertEquals(pts.get(0)[1], pts.get(pts.size() - 1)[1], 1e-9);
+    }
+
+    private static double distancePointToPolyline(double px, double py,
+            List<double[]> pts) {
+        double best = Double.POSITIVE_INFINITY;
+        for (int i = 1; i < pts.size(); i++) {
+            best = Math.min(best, distancePointToSegment(px, py,
+                    pts.get(i - 1), pts.get(i)));
+        }
+        return best;
+    }
+
+    private static double distancePointToSegment(double px, double py, double[] a, double[] b) {
+        double dx = b[0] - a[0], dy = b[1] - a[1];
+        double len2 = dx * dx + dy * dy;
+        if (len2 < 1e-18) {
+            return Math.hypot(px - a[0], py - a[1]);
+        }
+        double t = Math.max(0, Math.min(1, ((px - a[0]) * dx + (py - a[1]) * dy) / len2));
+        return Math.hypot(px - (a[0] + t * dx), py - (a[1] + t * dy));
+    }
+
+    @Test
+    void cubicFlatteningWithinTolerance() {
+        var runs = SvgFlattener.flatten(SvgPathData.parse("M 0 0 C 40 100 80 -100 120 0"));
+        var pts = runs.get(0).points();
+        // dense true-curve sampling: deviation of the polyline from the curve
+        double max = 0;
+        for (int i = 1; i <= 400; i++) {
+            double t = i / 400.0;
+            double u = 1 - t;
+            double bx = 3 * u * u * t * 40 + 3 * u * t * t * 80 + t * t * t * 120;
+            double by = 3 * u * u * t * 100 + 3 * u * t * t * (-100);
+            max = Math.max(max, distancePointToPolyline(bx, by, pts));
+        }
+        assertTrue(max <= SvgFlattener.TOLERANCE + 1e-9, "deviation " + max);
+    }
+
+    @Test
+    void arcFlatteningWithinTolerance() {
+        // (0,0) -> (50,50) at r=50: the chord is a diameter, center (25,25)
+        var runs = SvgFlattener.flatten(SvgPathData.parse("M 0 0 A 50 50 0 0 1 50 50"));
+        var pts = runs.get(0).points();
+        assertEquals(50.0, pts.get(pts.size() - 1)[0], 0.01);
+        assertEquals(50.0, pts.get(pts.size() - 1)[1], 0.01);
+        // every flattened segment midpoint must lie on the true circle
+        // (empirically verified center (50,0) for fA=0, fS=1 on these endpoints)
+        double max = 0;
+        for (int i = 1; i < pts.size(); i++) {
+            double mx = (pts.get(i - 1)[0] + pts.get(i)[0]) / 2;
+            double my = (pts.get(i - 1)[1] + pts.get(i)[1]) / 2;
+            max = Math.max(max, Math.abs(Math.hypot(mx - 50, my - 0) - 50));
+        }
+        assertTrue(max <= SvgFlattener.TOLERANCE + 1e-9, "sagitta " + max);
+    }
+
+    @Test
+    void smoothCubicReflectsThePreviousControlPoint() {
+        var runs = SvgFlattener.flatten(
+                SvgPathData.parse("M 0 0 C 40 100 80 -100 120 0 S 160 100 200 0"));
+        var pts = runs.get(0).points();
+        assertTrue(pts.size() > 4, "both curves flattened to multiple segments");
+        assertEquals(200.0, pts.get(pts.size() - 1)[0], 0.01);
+        assertEquals(0.0, pts.get(pts.size() - 1)[1], 0.01);
+    }
+
+    @Test
+    void smoothQuadReflectsThePreviousControlPoint() {
+        var runs = SvgFlattener.flatten(SvgPathData.parse("M 0 0 Q 20 40 40 0 T 80 0"));
+        var pts = runs.get(0).points();
+        assertTrue(pts.size() > 3, "both curves flattened to multiple segments");
+        assertEquals(80.0, pts.get(pts.size() - 1)[0], 0.01);
+        assertEquals(0.0, pts.get(pts.size() - 1)[1], 0.01);
+    }
+
+    @Test
+    void hVRelativeAndMixedCommandsResolve() {
+        var runs = SvgFlattener.flatten(
+                SvgPathData.parse("M 10 10 h 20 v 10 H 5 V 0 l 5 5 L 20 20 Z"));
+        var pts = runs.get(0).points();
+        // M(10,10) h(30,10) v(30,20) H(5,20) V(5,0) l(10,5) L(20,20) Z(10,10)
+        assertEquals(8, pts.size());
+        assertEquals(30.0, pts.get(1)[0], 1e-9);
+        assertEquals(20.0, pts.get(2)[1], 1e-9);
+        assertEquals(5.0, pts.get(3)[0], 1e-9);
+        assertEquals(0.0, pts.get(4)[1], 1e-9);
+        assertEquals(10.0, pts.get(5)[0], 1e-9);
+        assertEquals(10.0, pts.get(7)[0], 1e-9);
+        assertTrue(runs.get(0).closed());
+    }
+
+    @Test
+    void arcLargeSweepGoesTheLongWay() {
+        var short_ = SvgFlattener.flatten(SvgPathData.parse("M 0 0 A 50 50 0 0 1 50 50"));
+        var long_ = SvgFlattener.flatten(SvgPathData.parse("M 0 0 A 50 50 0 1 1 50 50"));
+        double lenShort = 0, lenLong = 0;
+        for (int i = 1; i < short_.get(0).points().size(); i++) {
+            lenShort += dist(short_.get(0).points().get(i - 1), short_.get(0).points().get(i));
+        }
+        for (int i = 1; i < long_.get(0).points().size(); i++) {
+            lenLong += dist(long_.get(0).points().get(i - 1), long_.get(0).points().get(i));
+        }
+        assertTrue(lenLong > lenShort * 2, "large-arc sweeps the long way: "
+                + lenShort + " vs " + lenLong);
+    }
+
+    private static double dist(double[] a, double[] b) {
+        return Math.hypot(b[0] - a[0], b[1] - a[1]);
+    }
+}
