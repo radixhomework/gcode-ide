@@ -48,3 +48,4 @@ jobs:
           "-Dsonar.organization=radixhomework"
           "-Dsonar.projectKey=radixhomework_gcode-ide"
           "-Dsonar.host.url=https://sonarcloud.io"
+          "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml"
