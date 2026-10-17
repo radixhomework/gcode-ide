@@ -37,6 +37,8 @@ jobs:
       # the shaded jar, then the scanner publishes the analysis to SonarQube
       # Cloud. All Sonar configuration lives here — the pom stays clean.
       # SONAR_TOKEN is picked up from the environment by the scanner.
+      # Data-holder files (plain records/enums, the app launcher) carry no
+      # logic worth unit-testing and are excluded from coverage measurement.
       # -D args are quoted because PowerShell (the default Windows shell)
       # otherwise mangles them — Maven then sees tokens like ".host.url=…".
       - name: Build, test and analyze
@@ -49,3 +51,4 @@ jobs:
           "-Dsonar.projectKey=radixhomework_gcode-ide"
           "-Dsonar.host.url=https://sonarcloud.io"
           "-Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml"
+          "-Dsonar.coverage.exclusions=**/Launcher.java,**/model/parsing/Diagnostic.java,**/model/parsing/Move.java,**/model/parsing/MoveKind.java,**/model/parsing/Position.java,**/model/parsing/Severity.java,**/model/parsing/Spindle.java,**/model/preview/BBox.java,**/model/preview/ToolpathStats.java,**/model/preview/ToolpathWarning.java,**/model/svg/CutSide.java,**/model/svg/SvgImportOptions.java,**/model/svg/SvgRun.java"
